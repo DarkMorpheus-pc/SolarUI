@@ -203,7 +203,8 @@ SolarUI CLI provides unified actions mapped across whichever shell engine is cur
 
 | Shortcut | Action |
 | :--- | :--- |
-| Mod + Space | Open Application Launcher |
+| Mod + Space | Open Solar Omnibar / Application Search |
+| Mod + G | Open Blaze GameZone (Gaming & Store Shell) |
 | Mod + Return | Open Primary Terminal Emulator |
 | Mod + Q | Close Focused Window |
 | Mod + F | Maximize Focused Column |
