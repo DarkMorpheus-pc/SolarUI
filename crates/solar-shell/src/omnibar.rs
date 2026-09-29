@@ -583,3 +583,30 @@ fn scan_running_processes(filter: &str) -> Vec<(u32, String)> {
     procs.sort_by(|a, b| a.1.cmp(&b.1));
     procs
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_evaluate_simple_math() {
+        assert_eq!(evaluate_simple_math("25 * 1024"), Some(25600.0));
+        assert_eq!(evaluate_simple_math("sqrt(144)"), Some(12.0));
+        assert_eq!(evaluate_simple_math("100 / 4 + 15"), Some(40.0));
+        assert_eq!(evaluate_simple_math("2 ^ 8"), Some(256.0));
+    }
+
+    #[test]
+    fn test_evaluate_units() {
+        let (title, res) = evaluate_units("100 usd in try").unwrap();
+        assert!(title.contains("TRY"));
+        assert_eq!(res, "3850.00");
+
+        let (title_km, _) = evaluate_units("50 km in miles").unwrap();
+        assert!(title_km.contains("Miles"));
+
+        let (title_gb, _) = evaluate_units("16 gb in mb").unwrap();
+        assert!(title_gb.contains("16384 MB"));
+    }
+}
+

@@ -209,6 +209,23 @@ window-rule {
     default-window-height { fixed 520; }
 }
 
+// SolarUI Omnibar (Raycast / Spotlight Command Hub)
+window-rule {
+    match app-id="^solar-omnibar$"
+    open-floating true
+    default-column-width { fixed 680; }
+    default-window-height { fixed 460; }
+    geometry-corner-radius 20
+    clip-to-geometry true
+}
+
+// Blaze GameZone Fullscreen Gaming Shell
+window-rule {
+    match app-id="^solar-gamezone$"
+    open-fullscreen true
+    geometry-corner-radius 0
+}
+
 // Steam & Dialog Window Rules
 window-rule {
     match app-id="steam"
@@ -269,7 +286,9 @@ binds {
     Mod+D     { spawn "solar-shell" "route" "dashboard"; }
 
     // ── SolarUI Panels & Settings (Routed via SolarSurfaceRouter) ──
-    Mod+Space           { spawn "solar-shell" "route" "launcher"; }
+    Mod+Space           { spawn "solar-shell" "omnibar"; }
+    Mod+G               { spawn "solar-shell" "gamezone"; }
+    Mod+Alt+K           { spawn "solar-shell" "easter-egg" "konami"; }
     Mod+S               { spawn "solar-shell" "route" "control-center"; }
     Mod+I               { spawn "solar-shell" "route" "settings"; }
     Mod+Comma           { spawn "noctalia" "msg" "settings-toggle"; }
