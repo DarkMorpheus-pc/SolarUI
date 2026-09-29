@@ -180,7 +180,9 @@ fn build_welcome_ui(main_loop: glib::MainLoop) {
     grid.set_row_spacing(10);
 
     let shortcuts = [
-        ("Mod + Space", "SolarUI Uygulama Menüsü"),
+        ("Mod + Space", "Solar Omnibar (Raycast / Spotlight Arama & Komut)"),
+        ("Mod + G", "Blaze GameZone (Steam Deck & Xbox UI Oyun Kabuğu)"),
+        ("Mod + Alt + K", "Konami Kodu Retro Modu (↑↑↓↓←→←→ B A)"),
         ("Mod + T / F", "KDE Serbest Kayan Pencere (Floating Window)"),
         ("Mod + Sol Tık Sürükle", "Pencereyi Ekranda İstediğin Yere Taşı"),
         ("Mod + Sağ Tık Sürükle", "Pencereyi İstenilen Boyuta Getir"),

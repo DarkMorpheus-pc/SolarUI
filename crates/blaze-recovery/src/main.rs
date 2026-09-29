@@ -281,8 +281,90 @@ fn get_folder_size_str(path: &Path) -> String {
 // Interactive UI Engine
 // -----------------------------------------------------------------------------
 
+pub fn run_plain_text_menu(app: &mut BerpApp) -> Result<()> {
+    loop {
+        println!("\n=======================================================");
+        println!("       BLAZE EMERGENCY RECOVERY PROTOCOL (BERP)        ");
+        println!("=======================================================");
+        println!("  Kök Bölümü: UUID={} | Btrfs: {}", app.root_uuid, app.root_btrfs);
+        println!("  Bulunan Snapshot: {} adet\n", app.snapshots.len());
+        println!("  [1] Zaman Makinesi (Snapshot Geri Yükleme)");
+        println!("  [2] Verilerimi Koru ve Sıfırla (Akıllı Yedekleme)");
+        println!("  [3] Fabrika Ayarlarına Tam Sıfırlama");
+        println!("  [4] Sistem & Donanım Teşhisi");
+        println!("  [5] Acil Durum Terminali (Root Shell)");
+        println!("  [R] Sistemi Yeniden Başlat");
+        println!("  [Q] Bilgisayarı Kapat");
+        print!("\nSeçiminiz (1-5, R, Q): ");
+        std::io::stdout().flush()?;
+
+        let mut line = String::new();
+        if std::io::stdin().read_line(&mut line)? == 0 {
+            break;
+        }
+        match line.trim().to_uppercase().as_str() {
+            "1" => {
+                if app.snapshots.is_empty() {
+                    println!("Kayıtlı snapshot bulunamadı.");
+                } else {
+                    for (i, s) in app.snapshots.iter().enumerate() {
+                        println!("  [{}] {} ({}) - {}", i + 1, s.name, s.date, s.description);
+                    }
+                    print!("Geri yüklemek istediğiniz numara (veya 0 iptal): ");
+                    std::io::stdout().flush()?;
+                    let mut pick = String::new();
+                    std::io::stdin().read_line(&mut pick)?;
+                    if let Ok(num) = pick.trim().parse::<usize>() {
+                        if num > 0 && num <= app.snapshots.len() {
+                            execute_snapshot_rollback(&app.snapshots[num - 1])?;
+                        }
+                    }
+                }
+            }
+            "2" => {
+                println!("Korunacak klasörler:");
+                for (i, f) in app.preserved_folders.iter().enumerate() {
+                    println!("  [{}] {} ({})", i + 1, f.name, f.size_human);
+                }
+                execute_preserved_reset(&app.preserved_folders)?;
+            }
+            "3" => {
+                println!("UYARI: Tüm veriler silinecektir! Onaylamak için SIFIRLA yazın:");
+                let mut c = String::new();
+                std::io::stdin().read_line(&mut c)?;
+                if c.trim().to_uppercase() == "SIFIRLA" {
+                    clear_boot_triggers();
+                    println!("Sistem sıfırlandı. Yeniden başlatılıyor...");
+                    do_reboot()?;
+                    break;
+                }
+            }
+            "4" => {
+                println!("Donanım taranıyor...");
+                let _ = Command::new("lsblk").status();
+            }
+            "5" => {
+                handle_emergency_shell()?;
+            }
+            "R" => {
+                do_reboot()?;
+                break;
+            }
+            "Q" => {
+                do_poweroff()?;
+                break;
+            }
+            _ => println!("Geçersiz seçim."),
+        }
+    }
+    Ok(())
+}
+
 pub fn run_interactive_tui(mut app: BerpApp) -> Result<()> {
-    terminal::enable_raw_mode()?;
+    if let Err(e) = terminal::enable_raw_mode() {
+        eprintln!("Raw mode failed: {}. Line-buffered konsol moduna geçiliyor...", e);
+        return run_plain_text_menu(&mut app);
+    }
     let mut stdout = stdout();
     execute!(
         stdout,
