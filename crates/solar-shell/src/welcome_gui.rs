@@ -155,6 +155,20 @@ fn build_welcome_ui(main_loop: glib::MainLoop) {
         glib::Propagation::Proceed
     });
 
+    let key_controller = gtk4::EventControllerKey::new();
+    let win_weak_key = window.downgrade();
+    key_controller.connect_key_pressed(move |_, key, _, _| {
+        if key == gdk::Key::Escape {
+            if let Some(win) = win_weak_key.upgrade() {
+                win.close();
+            }
+            glib::Propagation::Stop
+        } else {
+            glib::Propagation::Proceed
+        }
+    });
+    window.add_controller(key_controller);
+
     let root_box = GtkBox::new(Orientation::Vertical, 0);
     root_box.add_css_class("welcome-card");
 
