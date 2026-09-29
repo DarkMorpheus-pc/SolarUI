@@ -14,6 +14,7 @@ pub mod snap_gui;
 pub mod supervisor;
 pub mod switcher;
 pub mod welcome_gui;
+pub mod delight;
 
 use anyhow::Result;
 use apps::scan_desktop_applications;
@@ -384,8 +385,27 @@ async fn main() -> Result<()> {
             sync_noctalia_settings().await?;
             Ok(())
         }
+        "easter-egg" | "konami" => {
+            let egg = args.get(2).map(|s| s.as_str()).unwrap_or("konami");
+            delight::trigger_easter_egg(egg)?;
+            Ok(())
+        }
+        "sound" => {
+            let snd = args.get(2).map(|s| s.as_str()).unwrap_or("click");
+            delight::play_acoustic_feedback(snd)?;
+            Ok(())
+        }
+        "atmosphere" | "season" => {
+            let (name, color) = delight::get_seasonal_atmosphere();
+            println!("Aktif Mevsimsel Atmosfer: {} (Vurgu Rengi: {})", name, color);
+            Ok(())
+        }
+        "recovery" => {
+            let _ = std::process::Command::new("blaze-recovery").status();
+            Ok(())
+        }
         other => {
-            eprintln!("Unknown command: '{}'. Valid: route, switch, sync-noctalia, supervisor, run, autostart, settings, welcome, snap, minimize, restore, toggle-taskbar, apps, status, bar", other);
+            eprintln!("Unknown command: '{}'. Valid: route, switch, sync-noctalia, supervisor, run, autostart, settings, welcome, snap, minimize, restore, toggle-taskbar, apps, status, bar, easter-egg, sound, atmosphere, recovery", other);
             Ok(())
         }
     }
