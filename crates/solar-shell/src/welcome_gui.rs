@@ -230,7 +230,7 @@ fn build_welcome_ui(main_loop: glib::MainLoop) {
         || std::path::Path::new("/dev/mapper/live-base").exists();
 
     if is_live_installer {
-        let install_btn = Button::with_label("💿 Sabit Diske Kur (Anaconda)");
+        let install_btn = Button::with_label("Sabit Diske Kur (Anaconda)");
         install_btn.add_css_class("install-btn");
         let win_weak_inst = window.downgrade();
         let loop_inst = main_loop.clone();
