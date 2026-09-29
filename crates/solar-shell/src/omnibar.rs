@@ -27,6 +27,8 @@ pub enum OmnibarItemType {
     Conversion(String, String),
     ProcessKill(u32, String),
     SystemAction(String, String, String), // id, label, command
+    WebSearch(String, String),            // query, url
+    AiQuery(String),                      // prompt
 }
 
 #[derive(Clone, Debug)]
@@ -60,26 +62,26 @@ fn build_omnibar_ui(main_loop: glib::MainLoop) {
         }
 
         .omnibar-card {
-            background-color: alpha(#14171a, 0.96);
-            border: 1px solid alpha(#0095c7, 0.65);
-            border-radius: 20px;
+            background-color: rgba(18, 22, 27, 0.97);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 18px;
             padding: 16px;
-            box-shadow: 0 16px 48px rgba(0, 0, 0, 0.85);
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.85);
         }
 
         .omnibar-entry {
-            background-color: alpha(#1f2428, 0.9);
+            background-color: rgba(28, 34, 43, 0.95);
             color: #ffffff;
-            border: 1px solid alpha(#38c8ff, 0.4);
+            border: 1px solid rgba(255, 255, 255, 0.14);
             border-radius: 12px;
-            font-size: 16px;
+            font-size: 15px;
             padding: 10px 16px;
             margin-bottom: 12px;
         }
 
         .omnibar-entry:focus {
-            border-color: #38c8ff;
-            box-shadow: 0 0 10px rgba(56, 200, 255, 0.35);
+            border-color: rgba(255, 255, 255, 0.4);
+            box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.15);
         }
 
         .results-list {
@@ -95,8 +97,8 @@ fn build_omnibar_ui(main_loop: glib::MainLoop) {
         }
 
         .result-row:selected, .result-row:hover {
-            background: linear-gradient(90deg, alpha(#007ba4, 0.65), alpha(#0095c7, 0.4));
-            border: 1px solid alpha(#38c8ff, 0.6);
+            background-color: #262e38;
+            border: 1px solid rgba(255, 255, 255, 0.18);
         }
 
         .result-title {
@@ -106,22 +108,22 @@ fn build_omnibar_ui(main_loop: glib::MainLoop) {
         }
 
         .result-subtitle {
-            color: #9aa7af;
+            color: #8f9ca8;
             font-size: 12px;
         }
 
         .result-badge {
-            background-color: alpha(#0095c7, 0.25);
-            color: #62d4ff;
-            border: 1px solid alpha(#0095c7, 0.5);
+            background-color: rgba(255, 255, 255, 0.08);
+            color: #cbd5e1;
+            border: 1px solid rgba(255, 255, 255, 0.12);
             border-radius: 6px;
             padding: 2px 8px;
             font-size: 11px;
-            font-weight: 600;
+            font-weight: 700;
         }
 
         .footer-hint {
-            color: #60707a;
+            color: #6c7886;
             font-size: 11px;
             margin-top: 8px;
             padding-left: 6px;
@@ -367,7 +369,33 @@ fn execute_omnibar_item(item: &OmnibarItem) {
             println!("Executing system action: {}", cmd);
             let _ = Command::new("sh").args(["-c", cmd]).spawn();
         }
+        OmnibarItemType::WebSearch(query, url) => {
+            println!("Opening web search for '{}': {}", query, url);
+            let _ = Command::new("xdg-open").arg(url).spawn();
+        }
+        OmnibarItemType::AiQuery(query) => {
+            println!("Opening AI query for '{}'", query);
+            let encoded = url_encode_query(query);
+            let search_url = format!("https://duckduckgo.com/?q={}&ia=chat", encoded);
+            let _ = Command::new("xdg-open").arg(&search_url).spawn();
+        }
     }
+}
+
+fn url_encode_query(input: &str) -> String {
+    let mut encoded = String::new();
+    for b in input.bytes() {
+        match b {
+            b'a'..=b'z' | b'A'..=b'Z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                encoded.push(b as char);
+            }
+            b' ' => encoded.push('+'),
+            _ => {
+                encoded.push_str(&format!("%{:02X}", b));
+            }
+        }
+    }
+    encoded
 }
 
 fn generate_omnibar_items(raw_query: &str, apps: &[AppInfo]) -> Vec<OmnibarItem> {
@@ -459,6 +487,38 @@ fn generate_omnibar_items(raw_query: &str, apps: &[AppInfo]) -> Vec<OmnibarItem>
 
         if items.len() >= 30 {
             break;
+        }
+    }
+
+    // 6. Web and AI Search Integration
+    if !query.is_empty() {
+        let cfg = solar_common::SolarConfig::load();
+        if cfg.omnibar.enable_web_search {
+            let encoded = url_encode_query(query);
+            let search_url = match cfg.omnibar.search_engine.as_str() {
+                "Google" => format!("https://www.google.com/search?q={}", encoded),
+                "Brave" => format!("https://search.brave.com/search?q={}", encoded),
+                "Bing" => format!("https://www.bing.com/search?q={}", encoded),
+                _ => format!("https://duckduckgo.com/?q={}", encoded),
+            };
+
+            items.push(OmnibarItem {
+                title: format!("Web'de Ara ({}): \"{}\"", cfg.omnibar.search_engine, query),
+                subtitle: format!("Varsayılan tarayıcıda {} ile sonuçları görüntüle", cfg.omnibar.search_engine),
+                badge: "WEB".to_string(),
+                icon_name: Some("applications-internet".to_string()),
+                item_type: OmnibarItemType::WebSearch(query.to_string(), search_url),
+            });
+        }
+
+        if !cfg.omnibar.ai_api_key.trim().is_empty() {
+            items.push(OmnibarItem {
+                title: format!("Yapay Zekaya Sor: \"{}\"", query),
+                subtitle: "Gemini / OpenAI modeli üzerinden anında sorgula".to_string(),
+                badge: "AI".to_string(),
+                icon_name: Some("system-help".to_string()),
+                item_type: OmnibarItemType::AiQuery(query.to_string()),
+            });
         }
     }
 

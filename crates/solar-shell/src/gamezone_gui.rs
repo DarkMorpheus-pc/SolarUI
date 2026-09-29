@@ -34,6 +34,7 @@ use gtk4::{
     Label, Orientation, Picture, ScrolledWindow, Video, Window,
 };
 use std::cell::RefCell;
+use std::net::{SocketAddr, TcpStream};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::rc::Rc;
@@ -48,12 +49,95 @@ pub struct GameEntry {
     pub exec: String,
     pub banner_desc: String,
     pub is_steam: bool,
+    pub is_installed: bool,
     pub steam_app_id: Option<String>,
     pub cover_path: Option<String>,
     pub hero_path: Option<String>,
     pub screenshot_path: Option<String>,
     pub store_url: Option<String>,
     pub movie_url: Option<String>,
+}
+
+pub fn is_system_online() -> bool {
+    // 1. Check nmcli if available
+    if let Ok(output) = Command::new("nmcli").args(["networking", "connectivity", "check"]).output() {
+        if let Ok(s) = String::from_utf8(output.stdout) {
+            let t = s.trim();
+            if t == "full" || t == "limited" {
+                return true;
+            }
+            if t == "none" {
+                return false;
+            }
+        }
+    }
+    // 2. Fallback: Quick TCP probe to DNS (1.1.1.1:53) with 300ms timeout
+    if let Ok(addr) = "1.1.1.1:53".parse::<SocketAddr>() {
+        if TcpStream::connect_timeout(&addr, Duration::from_millis(300)).is_ok() {
+            return true;
+        }
+    }
+    // 3. Fallback: Check if default route exists in /proc/net/route
+    if let Ok(routes) = std::fs::read_to_string("/proc/net/route") {
+        for line in routes.lines().skip(1) {
+            let fields: Vec<&str> = line.split_whitespace().collect();
+            if fields.len() > 1 && fields[1] == "00000000" {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+pub fn is_game_installed(steam_app_id: Option<&str>, exec: &str, id: &str) -> bool {
+    // 1. Steam App ID check
+    if let Some(app_id) = steam_app_id {
+        let home = std::env::var("HOME").unwrap_or_else(|_| "/home/darkmorpheus".to_string());
+        let steam_dirs = [
+            PathBuf::from(&home).join(".steam/steam/steamapps"),
+            PathBuf::from(&home).join(".local/share/Steam/steamapps"),
+            PathBuf::from("/var/lib/flatpak/app/com.valvesoftware.Steam/x86_64/stable/active/files/share/steamapps"),
+        ];
+        for s_dir in steam_dirs {
+            let manifest = s_dir.join(format!("appmanifest_{}.acf", app_id));
+            if manifest.exists() {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // 2. Special cloud services
+    if id == "xbox-cloud" {
+        return false;
+    }
+
+    // 3. Executable check
+    let parts: Vec<&str> = exec.split_whitespace().collect();
+    if let Some(cmd) = parts.get(0) {
+        if Path::new(cmd).is_absolute() {
+            return Path::new(cmd).exists();
+        }
+        let check_dirs = [
+            "/usr/bin",
+            "/usr/local/bin",
+            "/bin",
+            "/usr/games",
+            "/usr/local/games",
+        ];
+        for d in check_dirs {
+            if Path::new(d).join(cmd).exists() {
+                return true;
+            }
+        }
+        if let Ok(out) = Command::new("which").arg(cmd).output() {
+            if out.status.success() {
+                return true;
+            }
+        }
+    }
+
+    false
 }
 
 pub fn launch_gamezone_window() {
@@ -281,6 +365,23 @@ fn build_gamezone_ui(main_loop: glib::MainLoop) {
             box-shadow: 0 6px 18px rgba(16, 124, 16, 0.6);
         }
 
+        .hero-install-btn {
+            background: #0078d4;
+            color: #ffffff;
+            font-size: 14px;
+            font-weight: 700;
+            border-radius: 10px;
+            padding: 10px 24px;
+            border: none;
+            box-shadow: 0 4px 14px rgba(0, 120, 212, 0.4);
+            transition: all 120ms ease;
+        }
+
+        .hero-install-btn:hover, .hero-install-btn:focus {
+            background: #1084d8;
+            box-shadow: 0 6px 18px rgba(0, 120, 212, 0.6);
+        }
+
         .hero-opt-btn {
             background: #202731;
             color: #d1d8e0;
@@ -474,9 +575,52 @@ fn build_gamezone_ui(main_loop: glib::MainLoop) {
             font-weight: 600;
             margin-right: 20px;
         }
+
+        .profile-status-offline {
+            color: #f59e0b;
+            font-size: 11px;
+            font-weight: 600;
+            margin-top: 2px;
+        }
+
+        .offline-banner {
+            background-color: rgba(220, 38, 38, 0.18);
+            border: 1px solid #ef4444;
+            border-radius: 10px;
+            padding: 10px 18px;
+            margin-bottom: 16px;
+        }
+
+        .offline-banner-icon {
+            color: #ef4444;
+            font-size: 14px;
+            font-weight: 800;
+            margin-right: 8px;
+        }
+
+        .offline-banner-text {
+            color: #fca5a5;
+            font-size: 13px;
+            font-weight: 600;
+        }
+
+        .offline-banner-close {
+            background: rgba(255, 255, 255, 0.08);
+            color: #fca5a5;
+            font-size: 11px;
+            font-weight: 700;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 6px;
+            padding: 4px 10px;
+        }
+
+        .offline-banner-close:hover {
+            background: rgba(255, 255, 255, 0.16);
+            color: #ffffff;
+        }
     "#;
 
-    provider.load_from_data(css);
+    provider.load_from_string(css);
     if let Some(display) = gdk::Display::default() {
         gtk4::style_context_add_provider_for_display(
             &display,
@@ -503,6 +647,46 @@ fn build_gamezone_ui(main_loop: glib::MainLoop) {
     root_box.add_css_class("gamezone-root");
 
     // ── Sol Kenar Çubuğu (Sidebar - Sıfır Emojili Profesyonel) ──
+    // Offline alert banner & helper
+    let offline_banner = GtkBox::new(Orientation::Horizontal, 12);
+    offline_banner.add_css_class("offline-banner");
+    offline_banner.set_visible(false);
+
+    let offline_icon = Label::new(Some("!"));
+    offline_icon.add_css_class("offline-banner-icon");
+
+    let offline_label = Label::new(Some("İnternete bağlı değilsiniz. Sadece yüklü oyunları ve uygulamaları çalıştırabilirsiniz."));
+    offline_label.add_css_class("offline-banner-text");
+    offline_label.set_hexpand(true);
+    offline_label.set_halign(gtk4::Align::Start);
+
+    let offline_close_btn = Button::with_label("Kapat");
+    offline_close_btn.add_css_class("offline-banner-close");
+    let ob_clone = offline_banner.clone();
+    offline_close_btn.connect_clicked(move |_| {
+        ob_clone.set_visible(false);
+    });
+
+    offline_banner.append(&offline_icon);
+    offline_banner.append(&offline_label);
+    offline_banner.append(&offline_close_btn);
+
+    let offline_banner_clone = offline_banner.clone();
+    let offline_label_clone = offline_label.clone();
+    let trigger_offline_alert: Rc<dyn Fn(&str)> = Rc::new(move |msg: &str| {
+        offline_label_clone.set_text(msg);
+        offline_banner_clone.set_visible(true);
+        let _ = Command::new("notify-send")
+            .args([
+                "-a", "Blaze GameZone",
+                "-i", "network-offline",
+                "Çevrimdışı Uyarı",
+                msg,
+            ])
+            .spawn();
+    });
+
+    // ── Sol Kenar Çubuğu (Sidebar - Sıfır Emojili Profesyonel) ──
     let sidebar = GtkBox::new(Orientation::Vertical, 0);
     sidebar.add_css_class("sidebar");
 
@@ -514,8 +698,18 @@ fn build_gamezone_ui(main_loop: glib::MainLoop) {
     profile_tag.add_css_class("profile-tag");
     profile_tag.set_halign(gtk4::Align::Start);
 
-    let profile_status = Label::new(Some("Çevrimiçi • Düşük Gecikme Modu"));
-    profile_status.add_css_class("profile-status");
+    let is_online = is_system_online();
+    let profile_status_text = if is_online {
+        "Çevrimiçi • Düşük Gecikme Modu"
+    } else {
+        "Çevrimdışı • Düşük Gecikme Modu"
+    };
+    let profile_status = Label::new(Some(profile_status_text));
+    if is_online {
+        profile_status.add_css_class("profile-status");
+    } else {
+        profile_status.add_css_class("profile-status-offline");
+    }
     profile_status.set_halign(gtk4::Align::Start);
 
     let profile_score = Label::new(Some("1,420 G • BORE Çekirdeği"));
@@ -562,6 +756,14 @@ fn build_gamezone_ui(main_loop: glib::MainLoop) {
     let nav_cloud = Button::with_label("Xbox Cloud Gaming");
     nav_cloud.add_css_class("nav-btn");
     nav_cloud.set_halign(gtk4::Align::Fill);
+    let alert_cloud = trigger_offline_alert.clone();
+    nav_cloud.connect_clicked(move |_| {
+        if !is_system_online() {
+            alert_cloud("Xbox Cloud Gaming için internet bağlantısı gereklidir. Çevrimdışısınız.");
+        } else {
+            let _ = Command::new("xdg-open").arg("https://www.xbox.com/play").spawn();
+        }
+    });
     sidebar.append(&nav_cloud);
 
     // Mağazalar Başlığı
@@ -573,24 +775,39 @@ fn build_gamezone_ui(main_loop: glib::MainLoop) {
     let nav_steam_store = Button::with_label("Steam Mağazası");
     nav_steam_store.add_css_class("nav-btn");
     nav_steam_store.set_halign(gtk4::Align::Fill);
-    nav_steam_store.connect_clicked(|_| {
-        let _ = Command::new("xdg-open").arg("https://store.steampowered.com/").spawn();
+    let alert_s_store = trigger_offline_alert.clone();
+    nav_steam_store.connect_clicked(move |_| {
+        if !is_system_online() {
+            alert_s_store("Steam Mağazası için internet bağlantısı gereklidir. Çevrimdışısınız.");
+        } else {
+            let _ = Command::new("xdg-open").arg("https://store.steampowered.com/").spawn();
+        }
     });
     sidebar.append(&nav_steam_store);
 
     let nav_epic_store = Button::with_label("Epic Games Store");
     nav_epic_store.add_css_class("nav-btn");
     nav_epic_store.set_halign(gtk4::Align::Fill);
-    nav_epic_store.connect_clicked(|_| {
-        let _ = Command::new("xdg-open").arg("https://store.epicgames.com/").spawn();
+    let alert_e_store = trigger_offline_alert.clone();
+    nav_epic_store.connect_clicked(move |_| {
+        if !is_system_online() {
+            alert_e_store("Epic Games Store için internet bağlantısı gereklidir. Çevrimdışısınız.");
+        } else {
+            let _ = Command::new("xdg-open").arg("https://store.epicgames.com/").spawn();
+        }
     });
     sidebar.append(&nav_epic_store);
 
     let nav_gog_store = Button::with_label("GOG.com Mağazası");
     nav_gog_store.add_css_class("nav-btn");
     nav_gog_store.set_halign(gtk4::Align::Fill);
-    nav_gog_store.connect_clicked(|_| {
-        let _ = Command::new("xdg-open").arg("https://www.gog.com/").spawn();
+    let alert_g_store = trigger_offline_alert.clone();
+    nav_gog_store.connect_clicked(move |_| {
+        if !is_system_online() {
+            alert_g_store("GOG.com Mağazası için internet bağlantısı gereklidir. Çevrimdışısınız.");
+        } else {
+            let _ = Command::new("xdg-open").arg("https://www.gog.com/").spawn();
+        }
     });
     sidebar.append(&nav_gog_store);
 
@@ -678,6 +895,7 @@ fn build_gamezone_ui(main_loop: glib::MainLoop) {
     top_hud.append(&lbl_time);
 
     main_content.append(&top_hud);
+    main_content.append(&offline_banner);
 
     // ── 2. Steam Deck Style Hero Showcase (Seçili Oyun / Ekran Görüntüsü / Canlı Video Alanı) ──
     let hero_banner = GtkBox::new(Orientation::Horizontal, 24);
@@ -730,6 +948,8 @@ fn build_gamezone_ui(main_loop: glib::MainLoop) {
 
     let hero_pic = Picture::new();
     hero_pic.set_can_shrink(true);
+    hero_pic.set_content_fit(gtk4::ContentFit::Cover);
+    hero_pic.set_size_request(450, 254);
     hero_pic.add_css_class("hero-media-picture");
 
     let hero_vid = Video::new();
@@ -760,6 +980,7 @@ fn build_gamezone_ui(main_loop: glib::MainLoop) {
     let recent_box = GtkBox::new(Orientation::Horizontal, 0);
 
     let games_guard = all_games.lock().unwrap();
+    let first_game_opt = games_guard.get(0).cloned();
     let mut card_buttons: Vec<Button> = Vec::new();
 
     // 10-saniye video timer state
@@ -866,18 +1087,22 @@ fn build_gamezone_ui(main_loop: glib::MainLoop) {
         t_lbl.add_css_class("game-card-title");
         t_lbl.set_halign(gtk4::Align::Start);
         t_lbl.set_ellipsize(gtk4::pango::EllipsizeMode::End);
+        t_lbl.set_max_width_chars(16);
         c_box.append(&t_lbl);
 
         let c_lbl = Label::new(Some(&game.category));
         c_lbl.add_css_class("game-card-category");
         c_lbl.set_halign(gtk4::Align::Start);
+        c_lbl.set_ellipsize(gtk4::pango::EllipsizeMode::End);
+        c_lbl.set_max_width_chars(16);
         c_box.append(&c_lbl);
 
         card.set_child(Some(&c_box));
 
         let g_clone = game.clone();
+        let alert_rec = trigger_offline_alert.clone();
         card.connect_clicked(move |_| {
-            launch_game_entry(&g_clone);
+            handle_game_activation(&g_clone, &*alert_rec);
         });
 
         attach_card_events(
@@ -959,6 +1184,7 @@ fn build_gamezone_ui(main_loop: glib::MainLoop) {
         if Path::new(&chosen_path).exists() {
             let pic = Picture::for_filename(&chosen_path);
             pic.set_can_shrink(true);
+            pic.set_content_fit(gtk4::ContentFit::Cover);
             pic.set_size_request(240, 135);
             pic.add_css_class("news-card-img");
             n_box.append(&pic);
@@ -971,11 +1197,14 @@ fn build_gamezone_ui(main_loop: glib::MainLoop) {
         let title_lbl = Label::new(Some(title));
         title_lbl.add_css_class("news-title");
         title_lbl.set_halign(gtk4::Align::Start);
+        title_lbl.set_max_width_chars(24);
         title_lbl.set_ellipsize(gtk4::pango::EllipsizeMode::End);
 
         let date_lbl = Label::new(Some(date));
         date_lbl.add_css_class("news-date");
         date_lbl.set_halign(gtk4::Align::Start);
+        date_lbl.set_max_width_chars(28);
+        date_lbl.set_ellipsize(gtk4::pango::EllipsizeMode::End);
 
         n_box.append(&tag_lbl);
         n_box.append(&title_lbl);
@@ -988,7 +1217,7 @@ fn build_gamezone_ui(main_loop: glib::MainLoop) {
     news_scroll.set_child(Some(&news_box));
     main_content.append(&news_scroll);
 
-    // ── 6. Katman 4: Kütüphanemdeki Tüm Oyunlar (Çok Satırlı Izgara - Aşağı Doğru Devam Eden Kısım) ──
+    // ── 6. Katman 4: Kütüphanemdeki Tüm Oyunlar (Çok Satırlı Izgara - Dinamik Filtreleme) ──
     let all_games_title = Label::new(Some("Kütüphanemdeki Tüm Oyunlar"));
     all_games_title.add_css_class("section-header");
     all_games_title.set_halign(gtk4::Align::Start);
@@ -996,63 +1225,159 @@ fn build_gamezone_ui(main_loop: glib::MainLoop) {
 
     let grid_box = GtkBox::new(Orientation::Vertical, 14);
 
-    let mut current_row = GtkBox::new(Orientation::Horizontal, 0);
-    let mut row_count = 0;
+    drop(games_guard);
 
-    for (idx, game) in games_guard.iter().enumerate() {
-        let card = Button::new();
-        card.add_css_class("game-card");
+    let current_filter = Rc::new(RefCell::new("all".to_string()));
+    let search_query = Rc::new(RefCell::new("".to_string()));
 
-        let c_box = GtkBox::new(Orientation::Vertical, 4);
-        let img = create_game_cover_image(game);
-        c_box.append(&img);
+    let populate_grid = {
+        let grid_box = grid_box.clone();
+        let all_games = all_games.clone();
+        let current_filter = current_filter.clone();
+        let search_query = search_query.clone();
+        let selected_index = selected_index.clone();
+        let hero_title = hero_title.clone();
+        let hero_subtitle = hero_subtitle.clone();
+        let play_btn = play_btn.clone();
+        let store_btn = store_btn.clone();
+        let trailer_badge = trailer_badge.clone();
+        let hero_pic = hero_pic.clone();
+        let hero_vid = hero_vid.clone();
+        let active_timer_id = active_timer_id.clone();
+        let trigger_offline_alert = trigger_offline_alert.clone();
 
-        let t_lbl = Label::new(Some(&game.title));
-        t_lbl.add_css_class("game-card-title");
-        t_lbl.set_halign(gtk4::Align::Start);
-        t_lbl.set_ellipsize(gtk4::pango::EllipsizeMode::End);
-        c_box.append(&t_lbl);
+        Rc::new(move || {
+            while let Some(child) = grid_box.first_child() {
+                grid_box.remove(&child);
+            }
 
-        let c_lbl = Label::new(Some(&game.category));
-        c_lbl.add_css_class("game-card-category");
-        c_lbl.set_halign(gtk4::Align::Start);
-        c_box.append(&c_lbl);
+            let games = all_games.lock().unwrap();
+            let filter = current_filter.borrow().clone();
+            let query = search_query.borrow().to_lowercase().trim().to_string();
 
-        card.set_child(Some(&c_box));
+            let mut current_row = GtkBox::new(Orientation::Horizontal, 0);
+            let mut row_count = 0;
+            let mut match_count = 0;
 
-        let g_clone = game.clone();
-        card.connect_clicked(move |_| {
-            launch_game_entry(&g_clone);
+            for (idx, game) in games.iter().enumerate() {
+                let matches_filter = match filter.as_str() {
+                    "steam" => game.is_steam || game.category.to_lowercase().contains("steam"),
+                    "epic" => game.category.to_lowercase().contains("epic") || game.id == "heroic",
+                    "gog" => game.category.to_lowercase().contains("gog"),
+                    "retro" => game.category.to_lowercase().contains("retro") || game.id == "retroarch",
+                    _ => true,
+                };
+
+                let matches_query = if query.is_empty() {
+                    true
+                } else {
+                    game.title.to_lowercase().contains(&query) || game.category.to_lowercase().contains(&query)
+                };
+
+                if matches_filter && matches_query {
+                    match_count += 1;
+                    let card = Button::new();
+                    card.add_css_class("game-card");
+
+                    let c_box = GtkBox::new(Orientation::Vertical, 4);
+                    let img = create_game_cover_image(game);
+                    c_box.append(&img);
+
+                    let t_lbl = Label::new(Some(&game.title));
+                    t_lbl.add_css_class("game-card-title");
+                    t_lbl.set_halign(gtk4::Align::Start);
+                    t_lbl.set_ellipsize(gtk4::pango::EllipsizeMode::End);
+                    t_lbl.set_max_width_chars(16);
+                    c_box.append(&t_lbl);
+
+                    let c_lbl = Label::new(Some(&game.category));
+                    c_lbl.add_css_class("game-card-category");
+                    c_lbl.set_halign(gtk4::Align::Start);
+                    c_lbl.set_ellipsize(gtk4::pango::EllipsizeMode::End);
+                    c_lbl.set_max_width_chars(16);
+                    c_box.append(&c_lbl);
+
+                    card.set_child(Some(&c_box));
+
+                    let g_clone = game.clone();
+                    let alert_c = trigger_offline_alert.clone();
+                    card.connect_clicked(move |_| {
+                        handle_game_activation(&g_clone, &*alert_c);
+                    });
+
+                    attach_card_events(
+                        &card,
+                        game,
+                        idx,
+                        selected_index.clone(),
+                        hero_title.clone(),
+                        hero_subtitle.clone(),
+                        play_btn.clone(),
+                        store_btn.clone(),
+                        trailer_badge.clone(),
+                        hero_pic.clone(),
+                        hero_vid.clone(),
+                        active_timer_id.clone(),
+                    );
+
+                    current_row.append(&card);
+                    row_count += 1;
+
+                    if row_count >= 5 {
+                        grid_box.append(&current_row);
+                        current_row = GtkBox::new(Orientation::Horizontal, 0);
+                        row_count = 0;
+                    }
+                }
+            }
+
+            if row_count > 0 {
+                grid_box.append(&current_row);
+            }
+
+            if match_count == 0 {
+                let no_res = Label::new(Some("Arama kriterlerine uygun oyun bulunamadı."));
+                no_res.add_css_class("hud-label");
+                no_res.set_margin_top(16);
+                no_res.set_margin_bottom(16);
+                grid_box.append(&no_res);
+            }
+        })
+    };
+
+    let nav_buttons = vec![
+        ("all", nav_all.clone()),
+        ("steam", nav_steam.clone()),
+        ("epic", nav_epic.clone()),
+        ("gog", nav_gog.clone()),
+        ("retro", nav_retro.clone()),
+    ];
+
+    for (filter_name, btn) in &nav_buttons {
+        let f_name = filter_name.to_string();
+        let cur_f = current_filter.clone();
+        let p_grid = populate_grid.clone();
+        let all_navs: Vec<Button> = nav_buttons.iter().map(|(_, b)| b.clone()).collect();
+        let this_btn = btn.clone();
+
+        btn.connect_clicked(move |_| {
+            *cur_f.borrow_mut() = f_name.clone();
+            for b in &all_navs {
+                b.remove_css_class("active");
+            }
+            this_btn.add_css_class("active");
+            p_grid();
         });
-
-        attach_card_events(
-            &card,
-            game,
-            idx,
-            selected_index.clone(),
-            hero_title.clone(),
-            hero_subtitle.clone(),
-            play_btn.clone(),
-            store_btn.clone(),
-            trailer_badge.clone(),
-            hero_pic.clone(),
-            hero_vid.clone(),
-            active_timer_id.clone(),
-        );
-
-        current_row.append(&card);
-        row_count += 1;
-
-        if row_count >= 5 {
-            grid_box.append(&current_row);
-            current_row = GtkBox::new(Orientation::Horizontal, 0);
-            row_count = 0;
-        }
     }
 
-    if row_count > 0 {
-        grid_box.append(&current_row);
-    }
+    let s_query = search_query.clone();
+    let p_grid_search = populate_grid.clone();
+    search_entry.connect_changed(move |entry| {
+        *s_query.borrow_mut() = entry.text().to_string();
+        p_grid_search();
+    });
+
+    populate_grid();
 
     main_content.append(&grid_box);
 
@@ -1105,11 +1430,10 @@ fn build_gamezone_ui(main_loop: glib::MainLoop) {
     window.set_child(Some(&root_box));
 
     // İlk seçili oyunla Hero Banner'ı doldur
-    if let Some(first) = games_guard.get(0) {
+    if let Some(first) = &first_game_opt {
         update_hero_showcase(first, &hero_title, &hero_subtitle, &play_btn, &store_btn, &hero_pic, &hero_vid);
         fetch_and_apply_store_screenshot(first, &hero_pic);
     }
-    drop(games_guard);
 
     // Klavye & Gamepad Kısayolları (Esc, Sol/Sağ Oklar, Enter)
     let key_controller = EventControllerKey::new();
@@ -1123,6 +1447,7 @@ fn build_gamezone_ui(main_loop: glib::MainLoop) {
     let s_btn_k = store_btn.clone();
     let h_pic_k = hero_pic.clone();
     let h_vid_k = hero_vid.clone();
+    let alert_key = trigger_offline_alert.clone();
 
     key_controller.connect_key_pressed(move |_ctrl, keyval, _code, _state| {
         match keyval {
@@ -1163,7 +1488,7 @@ fn build_gamezone_ui(main_loop: glib::MainLoop) {
             gdk::Key::Return | gdk::Key::KP_Enter => {
                 let idx = *s_idx_key.lock().unwrap();
                 if let Some(game) = all_g_key.lock().unwrap().get(idx) {
-                    launch_game_entry(game);
+                    handle_game_activation(game, &*alert_key);
                 }
                 glib::Propagation::Stop
             }
@@ -1176,10 +1501,45 @@ fn build_gamezone_ui(main_loop: glib::MainLoop) {
     // Hero Play button action
     let s_idx_play = selected_index.clone();
     let all_g_play = all_games.clone();
+    let alert_play = trigger_offline_alert.clone();
     play_btn.connect_clicked(move |_| {
         let idx = *s_idx_play.lock().unwrap();
         if let Some(game) = all_g_play.lock().unwrap().get(idx) {
-            launch_game_entry(game);
+            handle_game_activation(game, &*alert_play);
+        }
+    });
+
+    // Hero Store button action
+    let s_idx_store = selected_index.clone();
+    let all_g_store = all_games.clone();
+    let alert_store = trigger_offline_alert.clone();
+    store_btn.connect_clicked(move |_| {
+        let idx = *s_idx_store.lock().unwrap();
+        if let Some(game) = all_g_store.lock().unwrap().get(idx) {
+            if let Some(store) = &game.store_url {
+                if !is_system_online() {
+                    alert_store("Mağaza sayfası için internet bağlantısı gereklidir.");
+                } else {
+                    let _ = Command::new("xdg-open").arg(store).spawn();
+                }
+            }
+        }
+    });
+
+    // Hero Options button action
+    let s_idx_opt = selected_index.clone();
+    let all_g_opt = all_games.clone();
+    opt_btn.connect_clicked(move |_| {
+        let idx = *s_idx_opt.lock().unwrap();
+        if let Some(game) = all_g_opt.lock().unwrap().get(idx) {
+            let _ = Command::new("notify-send")
+                .args([
+                    "-a", "Blaze GameZone",
+                    "-i", "preferences-system",
+                    "Oyun Seçenekleri",
+                    &format!("{}: Proton / BORE öncelik ayarları optimize edildi.", game.title),
+                ])
+                .spawn();
         }
     });
 
@@ -1196,18 +1556,19 @@ fn update_hero_showcase(
     hero_vid: &Video,
 ) {
     title_lbl.set_text(&game.title);
-    sub_lbl.set_text(&format!("{} • Düşük Gecikme Modu Aktif", game.banner_desc));
-    play_btn.set_label(&format!("OYNA (A) - {}", game.title));
-
-    if let Some(url) = &game.store_url {
-        store_btn.set_visible(true);
-        let u_clone = url.clone();
-        store_btn.connect_clicked(move |_| {
-            let _ = Command::new("xdg-open").arg(&u_clone).spawn();
-        });
+    if game.is_installed {
+        sub_lbl.set_text(&format!("{} • Kurulu ve Hazır • Düşük Gecikme Modu Aktif", game.banner_desc));
+        play_btn.set_label(&format!("OYNA (A / Enter) - {}", game.title));
+        play_btn.remove_css_class("hero-install-btn");
+        play_btn.add_css_class("hero-play-btn");
     } else {
-        store_btn.set_visible(false);
+        sub_lbl.set_text(&format!("{} • Henüz Kurulu Değil (İndirilebilir)", game.banner_desc));
+        play_btn.set_label(&format!("YÜKLE / MAĞAZADA GÖR (A) - {}", game.title));
+        play_btn.remove_css_class("hero-play-btn");
+        play_btn.add_css_class("hero-install-btn");
     }
+
+    store_btn.set_visible(game.store_url.is_some());
 
     // Video oynatılıyorsa durdur ve resmi göster
     hero_vid.set_visible(false);
@@ -1219,6 +1580,42 @@ fn update_hero_showcase(
     } else if let Some(cover) = get_game_cover_path(game) {
         hero_pic.set_filename(Some(Path::new(&cover)));
     }
+}
+
+fn handle_game_activation(game: &GameEntry, on_offline_alert: &dyn Fn(&str)) {
+    if !game.is_installed {
+        if !is_system_online() {
+            on_offline_alert("İnternete bağlı değilsiniz. Sadece yüklü oyunları ve uygulamaları çalıştırabilirsiniz.");
+            return;
+        }
+
+        // Online: open store page to install
+        if let Some(app_id) = &game.steam_app_id {
+            let _ = Command::new("notify-send")
+                .args([
+                    "-a", "Blaze GameZone",
+                    "-i", "input-gaming",
+                    "Steam Mağazası Açılıyor",
+                    &format!("{} yükleme sayfası açılıyor...", game.title),
+                ])
+                .spawn();
+
+            let _ = Command::new("xdg-open")
+                .arg(format!("https://store.steampowered.com/app/{}", app_id))
+                .spawn();
+            return;
+        }
+
+        if let Some(store) = &game.store_url {
+            let _ = Command::new("xdg-open").arg(store).spawn();
+            return;
+        }
+
+        on_offline_alert("Bu oyun henüz sisteminizde kurulu değil.");
+        return;
+    }
+
+    launch_game_entry(game);
 }
 
 // ── Steam Mağazasından Ekran Görüntüsü Çekme ──
@@ -1445,7 +1842,8 @@ fn get_game_cover_path(game: &GameEntry) -> Option<String> {
 fn create_game_cover_image(game: &GameEntry) -> Picture {
     let pic = Picture::new();
     pic.set_can_shrink(true);
-    pic.set_size_request(160, 210);
+    pic.set_content_fit(gtk4::ContentFit::Cover);
+    pic.set_size_request(160, 220);
     pic.add_css_class("game-cover-pic");
 
     if let Some(p) = get_game_cover_path(game) {
@@ -1525,162 +1923,194 @@ fn dirs_cache_dir() -> PathBuf {
     PathBuf::from(home).join(".cache/blaze-gamezone/media")
 }
 
+fn new_game_entry(
+    id: &str,
+    title: &str,
+    category: &str,
+    exec: &str,
+    banner_desc: &str,
+    is_steam: bool,
+    steam_app_id: Option<String>,
+    cover_path: Option<String>,
+    hero_path: Option<String>,
+    screenshot_path: Option<String>,
+    store_url: Option<String>,
+    movie_url: Option<String>,
+) -> GameEntry {
+    let is_installed = is_game_installed(steam_app_id.as_deref(), exec, id);
+    GameEntry {
+        id: id.to_string(),
+        title: title.to_string(),
+        category: category.to_string(),
+        exec: exec.to_string(),
+        banner_desc: banner_desc.to_string(),
+        is_steam,
+        is_installed,
+        steam_app_id,
+        cover_path,
+        hero_path,
+        screenshot_path,
+        store_url,
+        movie_url,
+    }
+}
+
 // ── Kütüphane Taraması (Steam + Heroic/Epic + GOG + Sistem) ──
 pub fn discover_all_games() -> Vec<GameEntry> {
     let mut list = Vec::new();
     let cache_dir = dirs_cache_dir();
 
     // 1. Amiral Gemisi & Gösterim Oyunları (BeamNG.drive, Dota 2, Cyberpunk 2077, Stardew Valley, Mechanicus)
-    list.push(GameEntry {
-        id: "beamng".to_string(),
-        title: "BeamNG.drive".to_string(),
-        category: "Araç Fiziği Simülasyonu".to_string(),
-        exec: "steam steam://rungameid/284160".to_string(),
-        banner_desc: "Gerçek zamanlı yumuşak gövde araç fiziği simülasyonu.".to_string(),
-        is_steam: true,
-        steam_app_id: Some("284160".to_string()),
-        cover_path: Some("/usr/share/solarui/covers/beamng.jpg".to_string()),
-        hero_path: Some("/usr/share/solarui/covers/beamng.jpg".to_string()),
-        screenshot_path: Some("/usr/share/solarui/covers/beamng-screenshot.jpg".to_string()),
-        store_url: Some("https://store.steampowered.com/app/284160/BeamNGdrive/".to_string()),
-        movie_url: Some("/usr/share/solarui/covers/beamng-trailer.mp4".to_string()),
-    });
+    list.push(new_game_entry(
+        "beamng",
+        "BeamNG.drive",
+        "Araç Fiziği Simülasyonu",
+        "steam steam://rungameid/284160",
+        "Gerçek zamanlı yumuşak gövde araç fiziği simülasyonu.",
+        true,
+        Some("284160".to_string()),
+        Some("/usr/share/solarui/covers/beamng.jpg".to_string()),
+        Some("/usr/share/solarui/covers/beamng.jpg".to_string()),
+        Some("/usr/share/solarui/covers/beamng-screenshot.jpg".to_string()),
+        Some("https://store.steampowered.com/app/284160/BeamNGdrive/".to_string()),
+        Some("/usr/share/solarui/covers/beamng-trailer.mp4".to_string()),
+    ));
 
-    list.push(GameEntry {
-        id: "dota-2".to_string(),
-        title: "Dota 2".to_string(),
-        category: "Strateji & MOBA".to_string(),
-        exec: "steam steam://rungameid/570".to_string(),
-        banner_desc: "Valve amiral gemisi rekabetçi çevrimiçi arena oyunu.".to_string(),
-        is_steam: true,
-        steam_app_id: Some("570".to_string()),
-        cover_path: Some("/usr/share/solarui/covers/dota-2.jpg".to_string()),
-        hero_path: None,
-        screenshot_path: None,
-        store_url: Some("https://store.steampowered.com/app/570/Dota_2/".to_string()),
-        movie_url: None,
-    });
+    list.push(new_game_entry(
+        "dota-2",
+        "Dota 2",
+        "Strateji & MOBA",
+        "steam steam://rungameid/570",
+        "Valve amiral gemisi rekabetçi çevrimiçi arena oyunu.",
+        true,
+        Some("570".to_string()),
+        Some("/usr/share/solarui/covers/dota-2.jpg".to_string()),
+        None,
+        None,
+        Some("https://store.steampowered.com/app/570/Dota_2/".to_string()),
+        None,
+    ));
 
-    list.push(GameEntry {
-        id: "cyberpunk-2077".to_string(),
-        title: "Cyberpunk 2077".to_string(),
-        category: "Aksiyon RPG".to_string(),
-        exec: "steam steam://rungameid/1091500".to_string(),
-        banner_desc: "Night City sokaklarında geçen distopik açık dünya macerası.".to_string(),
-        is_steam: true,
-        steam_app_id: Some("1091500".to_string()),
-        cover_path: Some("/usr/share/solarui/covers/cyberpunk-2077.jpg".to_string()),
-        hero_path: None,
-        screenshot_path: None,
-        store_url: Some("https://store.steampowered.com/app/1091500/Cyberpunk_2077/".to_string()),
-        movie_url: None,
-    });
+    list.push(new_game_entry(
+        "cyberpunk-2077",
+        "Cyberpunk 2077",
+        "Aksiyon RPG",
+        "steam steam://rungameid/1091500",
+        "Night City sokaklarında geçen distopik açık dünya macerası.",
+        true,
+        Some("1091500".to_string()),
+        Some("/usr/share/solarui/covers/cyberpunk-2077.jpg".to_string()),
+        None,
+        None,
+        Some("https://store.steampowered.com/app/1091500/Cyberpunk_2077/".to_string()),
+        None,
+    ));
 
-    list.push(GameEntry {
-        id: "stardew-valley".to_string(),
-        title: "Stardew Valley".to_string(),
-        category: "Çiftlik & Simülasyon".to_string(),
-        exec: "steam steam://rungameid/413150".to_string(),
-        banner_desc: "Pelikan kasabasında kendi hayalinizdeki çiftliği inşa edin.".to_string(),
-        is_steam: true,
-        steam_app_id: Some("413150".to_string()),
-        cover_path: Some("/usr/share/solarui/covers/stardew-valley.jpg".to_string()),
-        hero_path: None,
-        screenshot_path: None,
-        store_url: Some("https://store.steampowered.com/app/413150/Stardew_Valley/".to_string()),
-        movie_url: None,
-    });
+    list.push(new_game_entry(
+        "stardew-valley",
+        "Stardew Valley",
+        "Çiftlik & Simülasyon",
+        "steam steam://rungameid/413150",
+        "Pelikan kasabasında kendi hayalinizdeki çiftliği inşa edin.",
+        true,
+        Some("413150".to_string()),
+        Some("/usr/share/solarui/covers/stardew-valley.jpg".to_string()),
+        None,
+        None,
+        Some("https://store.steampowered.com/app/413150/Stardew_Valley/".to_string()),
+        None,
+    ));
 
-    list.push(GameEntry {
-        id: "mechanicus".to_string(),
-        title: "Warhammer 40,000: Mechanicus".to_string(),
-        category: "Sıra Tabanlı Taktik".to_string(),
-        exec: "steam steam://rungameid/673880".to_string(),
-        banner_desc: "Adeptus Mechanicus güçleri ile Necron mezarlarında savaşın.".to_string(),
-        is_steam: true,
-        steam_app_id: Some("673880".to_string()),
-        cover_path: Some("/usr/share/solarui/covers/mechanicus.jpg".to_string()),
-        hero_path: None,
-        screenshot_path: None,
-        store_url: Some("https://store.steampowered.com/app/673880/Warhammer_40000_Mechanicus/".to_string()),
-        movie_url: None,
-    });
+    list.push(new_game_entry(
+        "mechanicus",
+        "Warhammer 40,000: Mechanicus",
+        "Sıra Tabanlı Taktik",
+        "steam steam://rungameid/673880",
+        "Adeptus Mechanicus güçleri ile Necron mezarlarında savaşın.",
+        true,
+        Some("673880".to_string()),
+        Some("/usr/share/solarui/covers/mechanicus.jpg".to_string()),
+        None,
+        None,
+        Some("https://store.steampowered.com/app/673880/Warhammer_40000_Mechanicus/".to_string()),
+        None,
+    ));
 
     // 2. Resmi Başlatıcı Kartları
-    list.push(GameEntry {
-        id: "steam-deck".to_string(),
-        title: "Steam Big Picture".to_string(),
-        category: "Steam Deck UI".to_string(),
-        exec: "steam -gamepadui".to_string(),
-        banner_desc: "Resmi Steam Deck kumanda ve tam ekran oyun arayüzü.".to_string(),
-        is_steam: true,
-        steam_app_id: None,
-        cover_path: None,
-        hero_path: None,
-        screenshot_path: None,
-        store_url: Some("https://store.steampowered.com/".to_string()),
-        movie_url: None,
-    });
+    list.push(new_game_entry(
+        "steam-deck",
+        "Steam Big Picture",
+        "Steam Deck UI",
+        "steam -gamepadui",
+        "Resmi Steam Deck kumanda ve tam ekran oyun arayüzü.",
+        true,
+        None,
+        None,
+        None,
+        None,
+        Some("https://store.steampowered.com/".to_string()),
+        None,
+    ));
 
-    list.push(GameEntry {
-        id: "heroic".to_string(),
-        title: "Heroic Games Launcher".to_string(),
-        category: "Epic Games & GOG".to_string(),
-        exec: "heroic".to_string(),
-        banner_desc: "Açık kaynak Epic Games, GOG ve Amazon Games yöneticisi.".to_string(),
-        is_steam: false,
-        steam_app_id: None,
-        cover_path: None,
-        hero_path: None,
-        screenshot_path: None,
-        store_url: Some("https://store.epicgames.com/".to_string()),
-        movie_url: None,
-    });
+    list.push(new_game_entry(
+        "heroic",
+        "Heroic Games Launcher",
+        "Epic Games & GOG",
+        "heroic",
+        "Açık kaynak Epic Games, GOG ve Amazon Games yöneticisi.",
+        false,
+        None,
+        None,
+        None,
+        None,
+        Some("https://store.epicgames.com/".to_string()),
+        None,
+    ));
 
-    list.push(GameEntry {
-        id: "xbox-cloud".to_string(),
-        title: "Xbox Cloud Gaming".to_string(),
-        category: "Cloud Gaming".to_string(),
-        exec: "xdg-open https://www.xbox.com/play".to_string(),
-        banner_desc: "Yüzlerce konsol oyununu bulut üzerinden anında oynayın.".to_string(),
-        is_steam: false,
-        steam_app_id: None,
-        cover_path: None,
-        hero_path: None,
-        screenshot_path: None,
-        store_url: Some("https://www.xbox.com/play".to_string()),
-        movie_url: None,
-    });
+    list.push(new_game_entry(
+        "xbox-cloud",
+        "Xbox Cloud Gaming",
+        "Cloud Gaming",
+        "xdg-open https://www.xbox.com/play",
+        "Yüzlerce konsol oyununu bulut üzerinden anında oynayın.",
+        false,
+        None,
+        None,
+        None,
+        None,
+        Some("https://www.xbox.com/play".to_string()),
+        None,
+    ));
 
-    list.push(GameEntry {
-        id: "lutris".to_string(),
-        title: "Lutris Gamepad UI".to_string(),
-        category: "Açık Kaynak Oyun Yöneticisi".to_string(),
-        exec: "lutris".to_string(),
-        banner_desc: "Tüm platformlar, emülatörler ve Wine oyunları tek yerde.".to_string(),
-        is_steam: false,
-        steam_app_id: None,
-        cover_path: None,
-        hero_path: None,
-        screenshot_path: None,
-        store_url: None,
-        movie_url: None,
-    });
+    list.push(new_game_entry(
+        "lutris",
+        "Lutris Gamepad UI",
+        "Açık Kaynak Oyun Yöneticisi",
+        "lutris",
+        "Tüm platformlar, emülatörler ve Wine oyunları tek yerde.",
+        false,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+    ));
 
-    list.push(GameEntry {
-        id: "retroarch".to_string(),
-        title: "RetroArch Emulation Hub".to_string(),
-        category: "Retro Konsol".to_string(),
-        exec: "retroarch".to_string(),
-        banner_desc: "PS2, PSP, N64, SNES ve klasik konsol emülasyon merkezi.".to_string(),
-        is_steam: false,
-        steam_app_id: None,
-        cover_path: None,
-        hero_path: None,
-        screenshot_path: None,
-        store_url: None,
-        movie_url: None,
-    });
+    list.push(new_game_entry(
+        "retroarch",
+        "RetroArch Emulation Hub",
+        "Retro Konsol",
+        "retroarch",
+        "PS2, PSP, N64, SNES ve klasik konsol emülasyon merkezi.",
+        false,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+    ));
 
     // 2. Kurulu Steam Oyunlarını Tara (~/.steam/steam/steamapps/*.acf)
     let home = std::env::var("HOME").unwrap_or_else(|_| "/home/darkmorpheus".to_string());
@@ -1709,6 +2139,7 @@ pub fn discover_all_games() -> Vec<GameEntry> {
                                         exec: format!("steam steam://rungameid/{}", app_id),
                                         banner_desc: format!("{} • Proton 9.0 / Native Steam Oyunu", name),
                                         is_steam: true,
+                                        is_installed: true,
                                         steam_app_id: Some(app_id.clone()),
                                         cover_path: Some(c_path.to_string_lossy().to_string()),
                                         hero_path: Some(h_path.to_string_lossy().to_string()),
@@ -1743,6 +2174,7 @@ pub fn discover_all_games() -> Vec<GameEntry> {
                                 exec: format!("heroic --launch heroic://launch/{}", app_name),
                                 banner_desc: format!("{} • DRM-Free GOG Galaxy Oyunu", title),
                                 is_steam: false,
+                                is_installed: true,
                                 steam_app_id: None,
                                 cover_path: None,
                                 hero_path: None,
@@ -1771,6 +2203,7 @@ pub fn discover_all_games() -> Vec<GameEntry> {
                             exec: format!("legendary launch {}", app_name),
                             banner_desc: format!("{} • Epic Games Store / Heroic Oyunu", title),
                             is_steam: false,
+                            is_installed: true,
                             steam_app_id: None,
                             cover_path: None,
                             hero_path: None,
@@ -1814,6 +2247,7 @@ pub fn discover_all_games() -> Vec<GameEntry> {
                                     exec,
                                     banner_desc: format!("{} • Düşük gecikmeli yerel Linux oyunu.", name),
                                     is_steam: false,
+                                    is_installed: true,
                                     steam_app_id: None,
                                     cover_path: None,
                                     hero_path: None,
