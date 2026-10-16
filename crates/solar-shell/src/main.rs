@@ -72,6 +72,29 @@ async fn main() -> Result<()> {
         )
         .init();
 
+    // Ensure WAYLAND_DISPLAY is resolved from XDG_RUNTIME_DIR if missing
+    if std::env::var("WAYLAND_DISPLAY").is_err() {
+        if let Ok(runtime_dir) = std::env::var("XDG_RUNTIME_DIR") {
+            if let Ok(entries) = std::fs::read_dir(&runtime_dir) {
+                let mut sockets: Vec<String> = entries
+                    .flatten()
+                    .filter_map(|e| {
+                        let name = e.file_name().to_string_lossy().to_string();
+                        if name.starts_with("wayland-") && !name.ends_with(".lock") {
+                            Some(name)
+                        } else {
+                            None
+                        }
+                    })
+                    .collect();
+                sockets.sort();
+                if let Some(last) = sockets.last() {
+                    std::env::set_var("WAYLAND_DISPLAY", last);
+                }
+            }
+        }
+    }
+
     let args: Vec<String> = std::env::args().collect();
     let bin_name = args.get(0).map(|s| s.as_str()).unwrap_or("");
     let default_cmd = if bin_name.ends_with("solar-settings") {
@@ -116,10 +139,7 @@ async fn main() -> Result<()> {
             let is_in_sync = match (desired.desired_engine, &actual) {
                 (engine::ShellEngine::Noctalia, supervisor::ActualEngine::Noctalia) => true,
                 (engine::ShellEngine::Caelestia, supervisor::ActualEngine::Caelestia) => true,
-                (
-                    engine::ShellEngine::Hybrid,
-                    supervisor::ActualEngine::Noctalia | supervisor::ActualEngine::Hybrid,
-                ) => true,
+                (engine::ShellEngine::End4Pc, supervisor::ActualEngine::End4Pc) => true,
                 _ => false,
             };
             let sync_status = if is_in_sync {
@@ -191,13 +211,22 @@ async fn main() -> Result<()> {
                 tracing::error!("Failed to reconcile shell engine on autostart: {}", e);
             }
 
+            // Start clipboard history daemon (cliphist + wl-paste)
+            std::thread::spawn(|| {
+                let _ = std::process::Command::new("wl-paste")
+                    .args(["--watch", "cliphist", "store"])
+                    .spawn();
+            });
+
             // Start ChromeOS Ash-level Watchdog daemon (auto-recovers shell engines within 3 seconds if crashed)
             let _watchdog_handle = supervisor.start_watchdog_loop();
 
             let cfg = SolarConfig::load();
             let is_live = std::path::Path::new("/run/initramfs/live").exists()
                 || std::path::Path::new("/dev/mapper/live-base").exists()
-                || std::path::Path::new("/usr/bin/liveinst").exists();
+                || std::fs::read_to_string("/proc/cmdline")
+                    .map(|c| c.contains("rd.live.image"))
+                    .unwrap_or(false);
             if cfg.shortcuts_hud.show_at_startup || is_live {
                 std::thread::spawn(|| {
                     std::thread::sleep(std::time::Duration::from_millis(2000));
@@ -240,10 +269,8 @@ async fn main() -> Result<()> {
             Ok(())
         }
         "gamezone" | "gaming" | "deck" => {
-            info!("Launching Blaze GameZone Fullscreen Shell...");
-            tokio::task::block_in_place(|| {
-                gamezone_gui::launch_gamezone_window();
-            });
+            info!("Entering Blaze GameZone Standalone Game Shell mode...");
+            run_gamezone_shell_session().await?;
             Ok(())
         }
         "toggle-taskbar" => {
@@ -421,14 +448,90 @@ async fn main() -> Result<()> {
             Ok(())
         }
         "recovery" => {
-            let _ = std::process::Command::new("blaze-recovery").status();
+            if std::io::IsTerminal::is_terminal(&std::io::stdout()) {
+                let _ = std::process::Command::new("blaze-recovery").status();
+            } else {
+                let _ = std::process::Command::new("ptyxis")
+                    .args(["--", "blaze-recovery"])
+                    .spawn();
+            }
+            Ok(())
+        }
+        "oobe" | "setup" => {
+            let _ = std::process::Command::new("/usr/bin/blaze-setup")
+                .spawn();
             Ok(())
         }
         other => {
-            eprintln!("Unknown command: '{}'. Valid: omnibar, gamezone, route, switch, sync-noctalia, supervisor, run, autostart, settings, welcome, snap, minimize, restore, toggle-taskbar, apps, status, bar, easter-egg, sound, atmosphere, recovery", other);
+            eprintln!("Unknown command: '{}'. Valid: omnibar, gamezone, route, switch, sync-noctalia, supervisor, run, autostart, settings, welcome, snap, minimize, restore, toggle-taskbar, apps, status, bar, easter-egg, sound, atmosphere, recovery, oobe", other);
             Ok(())
         }
     }
+}
+
+async fn run_gamezone_shell_session() -> Result<()> {
+    // 1. Mevcut aktif/istenen masaüstü kabuk motorunu tespit et ve kaydet
+    let supervisor = supervisor::SolarShellSupervisor::new();
+    let desired = supervisor.load_desired_state().unwrap_or_default();
+    let prev_engine = desired.desired_engine;
+
+    let runtime_dir = solar_common::get_solar_runtime_dir();
+    let _ = std::fs::create_dir_all(&runtime_dir);
+    let prev_shell_file = runtime_dir.join("gamezone_prev_shell.txt");
+    let lock_file = runtime_dir.join("gamezone-active.lock");
+
+    let _ = std::fs::write(&prev_shell_file, prev_engine.as_str());
+    let _ = std::fs::write(&lock_file, "1");
+    let _ = std::fs::write("/tmp/solar-gamezone-active.lock", "1");
+
+    info!(
+        "GameZone kabuk oturumu başlatıldı. Önceki masaüstü motoru kaydedildi: {:?}. Arka plan kabukları askıya alınıyor...",
+        prev_engine
+    );
+
+    // 2. Arka plan masaüstü kabuklarını (Noctalia, Caelestia, Taskbar) durdurarak RAM ve GPU'yu tamamen oyuna aç
+    let _ = std::process::Command::new("pkill")
+        .args(["-TERM", "-x", "noctalia"])
+        .status();
+    let _ = std::process::Command::new("pkill")
+        .args(["-TERM", "-f", "caelestia"])
+        .status();
+    if let Ok(end4) = std::env::var("SOLARUI_END4_PC_DIR") {
+        let _ = std::process::Command::new("qs").args(["--path", &end4, "kill"]).status();
+    } else {
+        let _ = std::process::Command::new("qs")
+            .args(["--path", "/usr/share/quickshell/end4-pC", "kill"])
+            .status();
+    }
+    let _ = std::process::Command::new("pkill")
+        .args(["-f", "solar-shell (run|gui|taskbar|window)"])
+        .status();
+
+    // 3. GameZone 10-Foot UI Kabuğunu çalıştır (kullanıcı çıkana kadar bekler)
+    tokio::task::block_in_place(|| {
+        gamezone_gui::launch_gamezone_window();
+    });
+
+    info!(
+        "GameZone kabuğundan çıkış yapıldı. Önceki masaüstü kabuğuna geri dönülüyor: {:?}...",
+        prev_engine
+    );
+
+    // 4. Kilit dosyasını kaldır
+    let _ = std::fs::remove_file(&lock_file);
+    let _ = std::fs::remove_file("/tmp/solar-gamezone-active.lock");
+
+    // 5. Kaydedilen masaüstü kabuğunu otomatik olarak yeniden başlat
+    let switcher = switcher::SolarShellSwitcher::new();
+    if let Err(e) = switcher.switch_engine(prev_engine).await {
+        tracing::error!(
+            "Masaüstü kabuğunu ({:?}) geri yükleme başarısız oldu: {}. Reconcile deneniyor...",
+            prev_engine, e
+        );
+        let _ = supervisor.reconcile().await;
+    }
+
+    Ok(())
 }
 
 async fn sync_noctalia_settings() -> Result<()> {

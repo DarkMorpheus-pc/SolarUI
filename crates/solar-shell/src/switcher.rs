@@ -1,15 +1,15 @@
 use crate::engine::ShellEngine;
-use crate::providers::{CaelestiaProvider, NoctaliaProvider, ShellProvider};
+use crate::providers::{CaelestiaProvider, End4PcProvider, NoctaliaProvider, ShellProvider};
 use crate::supervisor::{ActualEngine, SolarShellSupervisor};
 use anyhow::{bail, Context, Result};
 use std::time::Duration;
-use tracing::{info, warn};
+use tracing::info;
 
 pub struct SolarShellSwitcher {
     supervisor: SolarShellSupervisor,
     noctalia: Box<dyn ShellProvider>,
-    caelestia: Box<dyn ShellProvider>,
     full_caelestia: Box<dyn ShellProvider>,
+    end4_pc: Box<dyn ShellProvider>,
 }
 
 impl Default for SolarShellSwitcher {
@@ -17,8 +17,8 @@ impl Default for SolarShellSwitcher {
         Self {
             supervisor: SolarShellSupervisor::new(),
             noctalia: Box::new(NoctaliaProvider::new()),
-            caelestia: Box::new(CaelestiaProvider::for_hybrid()),
             full_caelestia: Box::new(CaelestiaProvider::for_full()),
+            end4_pc: Box::new(End4PcProvider::new()),
         }
     }
 }
@@ -37,17 +37,17 @@ impl SolarShellSwitcher {
     }
 
     async fn actual(&self) -> ActualEngine {
-        let (n, c_hyb, c_full) = tokio::join!(
+        let (n, c_full, e) = tokio::join!(
             self.noctalia.health_check(),
-            self.caelestia.health_check(),
-            self.full_caelestia.health_check()
+            self.full_caelestia.health_check(),
+            self.end4_pc.health_check()
         );
-        let c_alive = c_hyb.unwrap_or(false) || c_full.unwrap_or(false);
-        match (n.unwrap_or(false), c_alive) {
-            (true, true) => ActualEngine::Hybrid,
-            (true, false) => ActualEngine::Noctalia,
-            (false, true) => ActualEngine::Caelestia,
-            _ => ActualEngine::None,
+        match (n.unwrap_or(false), c_full.unwrap_or(false), e.unwrap_or(false)) {
+            (true, false, false) => ActualEngine::Noctalia,
+            (false, true, false) => ActualEngine::Caelestia,
+            (false, false, true) => ActualEngine::End4Pc,
+            (false, false, false) => ActualEngine::None,
+            _ => ActualEngine::Conflict,
         }
     }
 
@@ -92,8 +92,9 @@ impl SolarShellSwitcher {
 
     async fn preflight_check(&self, target: ShellEngine) -> Result<()> {
         let provider = match target {
-            ShellEngine::Noctalia | ShellEngine::Hybrid => &self.noctalia,
+            ShellEngine::Noctalia => &self.noctalia,
             ShellEngine::Caelestia => &self.full_caelestia,
+            ShellEngine::End4Pc => &self.end4_pc,
         };
         anyhow::ensure!(
             provider.is_installed().await,
@@ -123,26 +124,22 @@ impl SolarShellSwitcher {
     async fn transition(&self, target: ShellEngine) -> Result<()> {
         match target {
             ShellEngine::Noctalia => {
-                self.caelestia.stop().await?;
+                self.full_caelestia.stop().await?;
+                self.end4_pc.stop().await?;
                 self.noctalia.start().await?;
             }
             ShellEngine::Caelestia => {
                 let auto_scale = crate::settings_gui::detect_screen_resolution_and_auto_scale();
                 crate::settings_gui::apply_display_scale_dynamically(auto_scale);
 
-                self.caelestia.stop().await?;
                 self.noctalia.stop().await?;
+                self.end4_pc.stop().await?;
                 self.full_caelestia.start().await?;
             }
-            ShellEngine::Hybrid => {
-                let auto_scale = crate::settings_gui::detect_screen_resolution_and_auto_scale();
-                crate::settings_gui::apply_display_scale_dynamically(auto_scale);
-
-                self.caelestia.stop().await?;
-                self.noctalia.start().await?;
-                if let Err(error) = self.caelestia.start().await {
-                    warn!("Hybrid surfaces unavailable; Noctalia remains active: {error:#}");
-                }
+            ShellEngine::End4Pc => {
+                self.noctalia.stop().await?;
+                self.full_caelestia.stop().await?;
+                self.end4_pc.start().await?;
             }
         }
         for _ in 0..100 {
@@ -158,7 +155,8 @@ impl SolarShellSwitcher {
         let target = match previous {
             ActualEngine::Noctalia => ShellEngine::Noctalia,
             ActualEngine::Caelestia => ShellEngine::Caelestia,
-            ActualEngine::Hybrid => ShellEngine::Hybrid,
+            ActualEngine::End4Pc => ShellEngine::End4Pc,
+            ActualEngine::Conflict => bail!("Multiple full shells are active; no safe rollback target"),
             _ => bail!("No previously healthy shell is available"),
         };
         self.transition(target).await
@@ -209,6 +207,7 @@ mod tests {
     fn fixture(n: bool, c: bool, fail_n: bool, fail_c: bool) -> SolarShellSwitcher {
         let ns = Arc::new(AtomicBool::new(n));
         let cs = Arc::new(AtomicBool::new(c));
+        let es = Arc::new(AtomicBool::new(false));
         SolarShellSwitcher {
             supervisor: SolarShellSupervisor::new(),
             noctalia: Box::new(Fake {
@@ -217,15 +216,15 @@ mod tests {
                 fail_stop: false,
                 lie_about_start: false,
             }),
-            caelestia: Box::new(Fake {
-                alive: cs.clone(),
+            full_caelestia: Box::new(Fake {
+                alive: cs,
                 fail_start: fail_c,
                 fail_stop: false,
                 lie_about_start: false,
             }),
-            full_caelestia: Box::new(Fake {
-                alive: cs,
-                fail_start: fail_c,
+            end4_pc: Box::new(Fake {
+                alive: es,
+                fail_start: false,
                 fail_stop: false,
                 lie_about_start: false,
             }),
@@ -273,5 +272,18 @@ mod tests {
             .await
             .unwrap_err();
         assert!(err.to_string().contains("rollback also failed"));
+    }
+
+    #[tokio::test]
+    async fn end4_pc_transition_has_single_shell_ownership() {
+        let mut switcher = fixture(true, false, false, false);
+        switcher.end4_pc = Box::new(Fake {
+            alive: Arc::new(AtomicBool::new(false)),
+            fail_start: false,
+            fail_stop: false,
+            lie_about_start: false,
+        });
+        switcher.transition(ShellEngine::End4Pc).await.unwrap();
+        assert_eq!(switcher.actual().await, ActualEngine::End4Pc);
     }
 }

@@ -1,6 +1,6 @@
 msgid ""
 msgstr ""
-"Project-Id-Version: Caelestia Shell 5.03\n"
+"Project-Id-Version: Caelestia Shell 5.04\n"
 "Report-Msgid-Bugs-To: \n"
 "POT-Creation-Date: 2026-09-28 19:10+0300\n"
 "PO-Revision-Date: 2026-09-28 19:25+0300\n"
@@ -1236,8 +1236,8 @@ msgstr "Güncellemeler"
 msgid "System updates"
 msgstr "Sistem güncellemeleri"
 
-msgid "Switch between Noctalia, Caelestia & Hybrid modes"
-msgstr "Noctalia, Caelestia ve Hibrit modları arasında geçiş yapın"
+msgid "Switch between complete desktop shell engines"
+msgstr "Tam masaüstü kabuk motorları arasında geçiş yapın"
 
 msgid "Advanced Noctalia Shell Configuration"
 msgstr "Gelişmiş Noctalia Kabuk Yapılandırması"

@@ -14,20 +14,13 @@ pub struct CaelestiaProvider {
 
 impl Default for CaelestiaProvider {
     fn default() -> Self {
-        Self::for_hybrid()
+        Self::for_full()
     }
 }
 
 impl CaelestiaProvider {
     pub fn new() -> Self {
         Self::default()
-    }
-
-    pub fn for_hybrid() -> Self {
-        Self {
-            caelestia_bin: Self::discover_bin(),
-            is_full_mode: false,
-        }
     }
 
     pub fn for_full() -> Self {
@@ -180,11 +173,7 @@ impl CaelestiaProvider {
 #[async_trait]
 impl ShellProvider for CaelestiaProvider {
     fn name(&self) -> &'static str {
-        if self.is_full_mode {
-            "Caelestia Shell (Official)"
-        } else {
-            "Caelestia Hybrid Surfaces (Official)"
-        }
+        "Caelestia Shell (Official)"
     }
 
     async fn is_installed(&self) -> bool {

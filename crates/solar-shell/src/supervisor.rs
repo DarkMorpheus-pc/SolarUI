@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use tracing::{info, warn};
 
 use crate::engine::ShellEngine;
-use crate::providers::{CaelestiaProvider, NoctaliaProvider, ShellProvider};
+use crate::providers::{CaelestiaProvider, End4PcProvider, NoctaliaProvider, ShellProvider};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct DesiredState {
@@ -32,7 +32,8 @@ impl Default for DesiredState {
 pub enum ActualEngine {
     Noctalia,
     Caelestia,
-    Hybrid,
+    End4Pc,
+    Conflict,
     None,
     Failed(String),
 }
@@ -42,7 +43,8 @@ impl ActualEngine {
         match self {
             ActualEngine::Noctalia => "noctalia",
             ActualEngine::Caelestia => "caelestia",
-            ActualEngine::Hybrid => "hybrid",
+            ActualEngine::End4Pc => "end4-pc",
+            ActualEngine::Conflict => "conflict",
             ActualEngine::None => "none",
             ActualEngine::Failed(_) => "failed",
         }
@@ -53,6 +55,7 @@ pub struct SolarShellSupervisor {
     state_file: PathBuf,
     noctalia: NoctaliaProvider,
     caelestia: CaelestiaProvider,
+    end4_pc: End4PcProvider,
 }
 
 impl Default for SolarShellSupervisor {
@@ -62,6 +65,7 @@ impl Default for SolarShellSupervisor {
             state_file,
             noctalia: NoctaliaProvider::new(),
             caelestia: CaelestiaProvider::new(),
+            end4_pc: End4PcProvider::new(),
         }
     }
 }
@@ -104,7 +108,7 @@ impl SolarShellSupervisor {
         match (desired, actual) {
             (ShellEngine::Noctalia, ActualEngine::Noctalia) => true,
             (ShellEngine::Caelestia, ActualEngine::Caelestia) => true,
-            (ShellEngine::Hybrid, ActualEngine::Noctalia | ActualEngine::Hybrid) => true,
+            (ShellEngine::End4Pc, ActualEngine::End4Pc) => true,
             _ => false,
         }
     }
@@ -112,12 +116,14 @@ impl SolarShellSupervisor {
     pub async fn detect_actual_engine(&self) -> ActualEngine {
         let n_alive = self.noctalia.health_check().await.unwrap_or(false);
         let c_alive = self.caelestia.health_check().await.unwrap_or(false);
+        let e_alive = self.end4_pc.health_check().await.unwrap_or(false);
 
-        match (n_alive, c_alive) {
-            (true, true) => ActualEngine::Hybrid,
-            (true, false) => ActualEngine::Noctalia,
-            (false, true) => ActualEngine::Caelestia,
-            (false, false) => ActualEngine::None,
+        match (n_alive, c_alive, e_alive) {
+            (true, false, false) => ActualEngine::Noctalia,
+            (false, true, false) => ActualEngine::Caelestia,
+            (false, false, true) => ActualEngine::End4Pc,
+            (false, false, false) => ActualEngine::None,
+            _ => ActualEngine::Conflict,
         }
     }
 
@@ -130,6 +136,11 @@ impl SolarShellSupervisor {
         crate::switcher::SolarShellSwitcher::new().reconcile().await
     }
 
+    pub fn is_gamezone_active() -> bool {
+        let runtime_lock = solar_common::get_solar_runtime_dir().join("gamezone-active.lock");
+        runtime_lock.exists() || std::path::Path::new("/tmp/solar-gamezone-active.lock").exists()
+    }
+
     pub fn start_watchdog_loop(self: std::sync::Arc<Self>) -> tokio::task::JoinHandle<()> {
         tokio::spawn(async move {
             info!("SolarShell watchdog started");
@@ -137,6 +148,42 @@ impl SolarShellSupervisor {
             loop {
                 // Delay after completion: do not replay missed ticks in a restart storm.
                 tokio::time::sleep(std::time::Duration::from_secs(delay)).await;
+
+                // Anaconda kurulum sureci calısıyorsa shell gecislerini durdur.
+                // Kurulum sırasında health_check geçici basarısız donebilir ve
+                // watchdog'un yanlis engine'e gecmesine yol acar.
+                // /proc dosya sistemi uzerinden kontrol: fork/exec gerektirmez.
+                let anaconda_running = std::path::Path::new("/run/anaconda.pid").exists()
+                    || std::fs::read_dir("/proc")
+                        .map(|entries| {
+                            entries.flatten().any(|e| {
+                                let name = e.file_name();
+                                if name.to_str().map(|s| s.chars().all(|c| c.is_ascii_digit())).unwrap_or(false) {
+                                    std::fs::read_to_string(e.path().join("comm"))
+                                        .map(|c| c.trim() == "anaconda")
+                                        .unwrap_or(false)
+                                } else {
+                                    false
+                                }
+                            })
+                        })
+                        .unwrap_or(false);
+
+                // GameZone bağımsız oyun kabuğu modu aktifse desktop shell denetimini askıya al.
+                // Bu sayede oyun sırasında arka planda Noctalia/Caelestia çalıştırılmaz,
+                // RAM ve GPU kaynakları tamamen oyuna tahsis edilir.
+                if Self::is_gamezone_active() {
+                    tracing::debug!("GameZone standalone game shell is active; watchdog desktop shell reconciliation suspended.");
+                    delay = 3;
+                    continue;
+                }
+
+                if anaconda_running {
+                    tracing::debug!("Anaconda kurulumu devam ediyor; watchdog shell gecisi askiya alindi.");
+                    delay = 5;
+                    continue;
+                }
+
                 match self.reconcile().await {
                     Ok(()) => delay = 3,
                     Err(e) => {
@@ -163,16 +210,10 @@ mod tests {
             ShellEngine::Caelestia,
             &ActualEngine::Caelestia
         ));
-        // Hybrid modunda Noctalia omurgası yeterlidir
         assert!(SolarShellSupervisor::is_reconciled(
-            ShellEngine::Hybrid,
-            &ActualEngine::Noctalia
+            ShellEngine::End4Pc,
+            &ActualEngine::End4Pc
         ));
-        assert!(SolarShellSupervisor::is_reconciled(
-            ShellEngine::Hybrid,
-            &ActualEngine::Hybrid
-        ));
-
         // Uyuşmazlık durumları
         assert!(!SolarShellSupervisor::is_reconciled(
             ShellEngine::Noctalia,
