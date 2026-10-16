@@ -34,10 +34,13 @@ impl Default for End4PcProvider {
             .find(|path| path.join("shell.qml").is_file())
             .unwrap_or_else(|| PathBuf::from("/usr/share/quickshell/end4-pC"));
 
-        let qs_bin = [PathBuf::from("/usr/bin/qs"), PathBuf::from("/usr/bin/quickshell")]
-            .into_iter()
-            .find(|path| path.is_file())
-            .unwrap_or_else(|| PathBuf::from("qs"));
+        let qs_bin = [
+            PathBuf::from("/usr/bin/qs"),
+            PathBuf::from("/usr/bin/quickshell"),
+        ]
+        .into_iter()
+        .find(|path| path.is_file())
+        .unwrap_or_else(|| PathBuf::from("qs"));
 
         Self { qs_bin, config_dir }
     }
@@ -110,8 +113,9 @@ impl End4PcProvider {
 
     fn ipc_target(action: ShellAction) -> (&'static str, &'static str) {
         match action {
-            ShellAction::Launcher | ShellAction::Overview | ShellAction::WindowSwitcher =>
-                ("search", "toggle"),
+            ShellAction::Launcher | ShellAction::Overview | ShellAction::WindowSwitcher => {
+                ("search", "toggle")
+            }
             ShellAction::ControlCenter | ShellAction::Dashboard => ("sidebarRight", "toggle"),
             ShellAction::Session => ("session", "toggle"),
             ShellAction::Settings => ("settings", "toggle"),
@@ -137,7 +141,10 @@ impl ShellProvider for End4PcProvider {
         if !self.get_pids().await.is_empty() {
             self.stop().await?;
         }
-        anyhow::ensure!(self.is_installed().await, "end4-pC or Quickshell is not installed");
+        anyhow::ensure!(
+            self.is_installed().await,
+            "end4-pC or Quickshell is not installed"
+        );
 
         info!("Starting end4-pC from {:?}", self.config_dir);
         self.cmd()
@@ -145,14 +152,38 @@ impl ShellProvider for End4PcProvider {
             .spawn()
             .context("Cannot start end4-pC")?;
 
-        for _ in 0..100 {
-            sleep(Duration::from_millis(50)).await;
+        // First launch creates configuration and shader caches. Software
+        // rendering and slower disks can need well over five seconds.
+        for _ in 0..300 {
+            sleep(Duration::from_millis(100)).await;
             if self.health_check().await.unwrap_or(false) {
                 return Ok(());
             }
         }
+        let diagnostics = self
+            .cmd()
+            .arg("log")
+            .output_timeout()
+            .await
+            .map(|out| {
+                format!(
+                    "{}{}",
+                    String::from_utf8_lossy(&out.stdout),
+                    String::from_utf8_lossy(&out.stderr)
+                )
+            })
+            .unwrap_or_else(|error| format!("log unavailable: {error:#}"));
         let _ = self.stop().await;
-        bail!("end4-pC did not become IPC-ready within 5 seconds")
+        let tail = diagnostics
+            .lines()
+            .rev()
+            .take(20)
+            .collect::<Vec<_>>()
+            .into_iter()
+            .rev()
+            .collect::<Vec<_>>()
+            .join("\n");
+        bail!("end4-pC did not become IPC-ready within 30 seconds\n{tail}")
     }
 
     async fn stop(&self) -> Result<()> {
@@ -176,7 +207,10 @@ impl ShellProvider for End4PcProvider {
                 .status()
                 .await;
         }
-        anyhow::ensure!(self.get_pids().await.is_empty(), "end4-pC processes could not be stopped");
+        anyhow::ensure!(
+            self.get_pids().await.is_empty(),
+            "end4-pC processes could not be stopped"
+        );
         Ok(())
     }
 
@@ -189,7 +223,9 @@ impl ShellProvider for End4PcProvider {
             Err(_) => return Ok(false),
         };
         Ok(output.status.success()
-            && String::from_utf8_lossy(&output.stdout).to_lowercase().contains("ready"))
+            && String::from_utf8_lossy(&output.stdout)
+                .to_lowercase()
+                .contains("ready"))
     }
 
     async fn dispatch(&self, action: ShellAction) -> Result<()> {
@@ -204,9 +240,21 @@ mod tests {
 
     #[test]
     fn solar_actions_have_stable_end4_pc_ipc_targets() {
-        assert_eq!(End4PcProvider::ipc_target(ShellAction::Launcher), ("search", "toggle"));
-        assert_eq!(End4PcProvider::ipc_target(ShellAction::ControlCenter), ("sidebarRight", "toggle"));
-        assert_eq!(End4PcProvider::ipc_target(ShellAction::Session), ("session", "toggle"));
-        assert_eq!(End4PcProvider::ipc_target(ShellAction::Settings), ("settings", "toggle"));
+        assert_eq!(
+            End4PcProvider::ipc_target(ShellAction::Launcher),
+            ("search", "toggle")
+        );
+        assert_eq!(
+            End4PcProvider::ipc_target(ShellAction::ControlCenter),
+            ("sidebarRight", "toggle")
+        );
+        assert_eq!(
+            End4PcProvider::ipc_target(ShellAction::Session),
+            ("session", "toggle")
+        );
+        assert_eq!(
+            End4PcProvider::ipc_target(ShellAction::Settings),
+            ("settings", "toggle")
+        );
     }
 }

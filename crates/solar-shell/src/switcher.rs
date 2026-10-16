@@ -42,7 +42,11 @@ impl SolarShellSwitcher {
             self.full_caelestia.health_check(),
             self.end4_pc.health_check()
         );
-        match (n.unwrap_or(false), c_full.unwrap_or(false), e.unwrap_or(false)) {
+        match (
+            n.unwrap_or(false),
+            c_full.unwrap_or(false),
+            e.unwrap_or(false),
+        ) {
             (true, false, false) => ActualEngine::Noctalia,
             (false, true, false) => ActualEngine::Caelestia,
             (false, false, true) => ActualEngine::End4Pc,
@@ -66,7 +70,8 @@ impl SolarShellSwitcher {
                     }
                 }
             }
-            acquired.context("Another shell transition is in progress and did not finish in time")?
+            acquired
+                .context("Another shell transition is in progress and did not finish in time")?
         } else {
             solar_common::persistence::try_lock(&lock_path)
                 .context("Another shell transition is in progress")?
@@ -110,7 +115,7 @@ impl SolarShellSwitcher {
         previous: &ActualEngine,
     ) -> Result<()> {
         if let Err(error) = self.transition(target).await {
-            match self.rollback(previous).await {
+            match self.rollback_or_safe_default(previous).await {
                 Ok(()) => bail!("Shell transition failed: {error:#}; previous shell restored"),
                 Err(rollback) => {
                     bail!("Shell transition failed: {error:#}; rollback also failed: {rollback:#}")
@@ -119,6 +124,17 @@ impl SolarShellSwitcher {
         }
         info!("Shell transition verified: {target:?}");
         Ok(())
+    }
+
+    async fn rollback_or_safe_default(&self, previous: &ActualEngine) -> Result<()> {
+        match previous {
+            ActualEngine::None | ActualEngine::Failed(_) => {
+                // OOBE may request an optional shell before any healthy shell
+                // exists. A failure must still leave a usable desktop.
+                self.transition(ShellEngine::Noctalia).await
+            }
+            _ => self.rollback(previous).await,
+        }
     }
 
     async fn transition(&self, target: ShellEngine) -> Result<()> {
@@ -156,7 +172,9 @@ impl SolarShellSwitcher {
             ActualEngine::Noctalia => ShellEngine::Noctalia,
             ActualEngine::Caelestia => ShellEngine::Caelestia,
             ActualEngine::End4Pc => ShellEngine::End4Pc,
-            ActualEngine::Conflict => bail!("Multiple full shells are active; no safe rollback target"),
+            ActualEngine::Conflict => {
+                bail!("Multiple full shells are active; no safe rollback target")
+            }
             _ => bail!("No previously healthy shell is available"),
         };
         self.transition(target).await
