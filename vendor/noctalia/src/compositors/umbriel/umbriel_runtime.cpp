@@ -90,13 +90,18 @@ namespace compositors::umbriel {
     return !m_socketPath.empty();
   }
 
-  std::optional<nlohmann::json>
-  UmbrielRuntime::requestCommand(std::string_view cmd, std::optional<std::string_view> arg) const {
+  const std::string& UmbrielRuntime::socketPath() const {
+    ensureResolved();
+    return m_socketPath;
+  }
+
+  std::optional<nlohmann::json> UmbrielRuntime::requestCommand(std::string_view cmd) const {
     nlohmann::json request = nlohmann::json::object();
     request["cmd"] = cmd;
-    if (arg.has_value()) {
-      request["arg"] = *arg;
-    }
+    return send(request);
+  }
+
+  std::optional<nlohmann::json> UmbrielRuntime::send(const nlohmann::json& request) const {
     auto payload = request.dump();
     payload.push_back('\n');
 
@@ -110,8 +115,10 @@ namespace compositors::umbriel {
     return reply.json;
   }
 
-  bool UmbrielRuntime::requestAction(std::string_view action) const {
-    return requestCommand("msg", action).has_value();
+  bool UmbrielRuntime::requestAction(std::string_view action, nlohmann::json fields) const {
+    fields["cmd"] = "action";
+    fields["action"] = action;
+    return send(fields).has_value();
   }
 
   UmbrielRuntime::IpcReply UmbrielRuntime::request(std::string_view payload) const {

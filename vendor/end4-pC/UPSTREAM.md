@@ -2,8 +2,8 @@
 
 - Project: end4-pC
 - Repository: https://github.com/pctrade/end4-pC
-- Imported commit: `8fbb6716cba628a13103e665e9538021683a7250`
-- Imported on: 2026-10-16
+- Imported commit: `e29674b92bc4dc25d8a17a8c503a7c83f7922fd1`
+- Imported on: 2026-11-02
 - License: GNU General Public License v3.0 (`LICENSE`)
 - Original project credited by upstream: https://github.com/end-4/dots-hyprland
 

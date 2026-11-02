@@ -18,9 +18,7 @@ Singleton {
     Connections {
         target: Config
         function onReadyChanged() {
-            // SolarUI owns shell/notification process transitions on Niri.
-            // Never kill unrelated desktop processes from inside the shell.
-            if (Config.ready && WM.compositor === "hyprland") checkConflictsProc.running = true
+            if (Config.ready) checkConflictsProc.running = true
         }
     }
 

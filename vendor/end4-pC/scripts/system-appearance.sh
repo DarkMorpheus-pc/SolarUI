@@ -30,9 +30,7 @@ read_cursor() {
 }
 
 apply_cursor() {
-    if command -v hyprctl >/dev/null 2>&1 && [ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]; then
-        hyprctl setcursor "$1" "$2" >/dev/null 2>&1
-    fi
+    hyprctl setcursor "$1" "$2" >/dev/null 2>&1
     gsettings set org.gnome.desktop.interface cursor-theme "$1" 2>/dev/null
     gsettings set org.gnome.desktop.interface cursor-size "$2" 2>/dev/null
     mkdir -p "$HOME/.icons/default"
@@ -59,7 +57,7 @@ case "$action" in
             name=$(basename "$dir")
             case "$name" in default|hicolor) continue ;; esac
             [ -f "$dir/index.theme" ] && grep -q "^Directories=" "$dir/index.theme" && echo "$name"
-        done | sort -u
+        done | grep -Ev -- '-Dynamic-' | sort -u
         ;;
     --list-cursors)
         theme_dirs | while read -r dir; do

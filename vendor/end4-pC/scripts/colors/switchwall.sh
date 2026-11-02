@@ -15,26 +15,6 @@ terminalscheme="$SCRIPT_DIR/terminal/scheme-base.json"
 # shellcheck source=../lib/config.sh
 source "$SCRIPT_DIR/../lib/config.sh"
 
-monitor_json() {
-    if command -v niri >/dev/null 2>&1 && printf '%s %s' "${XDG_CURRENT_DESKTOP:-}" "${XDG_SESSION_DESKTOP:-}" | grep -qi niri; then
-        local focused
-        focused=$(niri msg -j workspaces 2>/dev/null | jq -r '.[] | select(.is_focused == true) | .output' | head -n1)
-        niri msg -j outputs 2>/dev/null | jq --arg focused "$focused" '[to_entries[] | {
-            name: .key,
-            width: (.value.current_mode.width // .value.logical.width // 1920),
-            height: (.value.current_mode.height // .value.logical.height // 1080),
-            scale: (.value.logical.scale // 1),
-            x: (.value.logical.x // 0),
-            y: (.value.logical.y // 0),
-            focused: (.key == $focused)
-        }]'
-    else
-        hyprctl monitors -j
-    fi
-}
-
-monitor_names() { monitor_json | jq -r '.[].name'; }
-
 handle_kde_material_you_colors() {
     if [ -f "$SHELL_CONFIG_FILE" ]; then
         enable_qt_apps=$(jq -r '.appearance.wallpaperTheming.enableQtApps' "$SHELL_CONFIG_FILE")
@@ -52,7 +32,46 @@ handle_kde_material_you_colors() {
             kde_scheme_variant="scheme-tonal-spot"
             ;;
     esac
+
+    # Konsole lock: the kde-material-you-colors wrapper also rewrites the
+    # Konsole profiles' [Appearance] ColorScheme/Font to the generated
+    # MaterialYou values. Snapshot the profiles first and restore them after
+    # the wrapper runs so Konsole keeps the user's own color scheme while
+    # every other app is still themed.
+    KONSOLE_DIR="$HOME/.local/share/konsole"
+    konsole_backup_dir="$STATE_DIR/user/generated/konsole-lock-backup"
+    lock_konsole="true"
+    if [ -f "$SHELL_CONFIG_FILE" ]; then
+        lock_konsole=$(jq -r '.appearance.wallpaperTheming.lockKonsoleColors // "true"' "$SHELL_CONFIG_FILE")
+    fi
+
+    konsole_lock_backup() {
+        [ ! -d "$konsole_backup_dir" ] && mkdir -p "$konsole_backup_dir"
+        find "$KONSOLE_DIR" -maxdepth 1 -name "*.profile" -type f -exec cp -f {} "$konsole_backup_dir/" \;
+    }
+
+    konsole_lock_restore() {
+        if [ -d "$konsole_backup_dir" ] && compgen -G "$konsole_backup_dir/*.profile" > /dev/null; then
+            for f in "$konsole_backup_dir"/*.profile; do
+                cp -f "$f" "$KONSOLE_DIR/$(basename "$f")" 2>/dev/null || true
+            done
+        fi
+    }
+
+    if [[ "$lock_konsole" == "true" && -d "$KONSOLE_DIR" ]]; then
+        konsole_lock_backup
+    fi
+
     "$XDG_CONFIG_HOME"/matugen/templates/kde/kde-material-you-colors-wrapper.sh --scheme-variant "$kde_scheme_variant"
+
+    if [[ "$lock_konsole" == "true" ]]; then
+        konsole_lock_restore
+    fi
+
+    # kde-material-you-colors rewrites the KDE icon theme from its own config.
+    # Re-assert the managed theme after the wrapper, but only when the user
+    # enabled the override (the manager enforces that policy).
+    apply_icon_override_safety_net "$mode_flag"
 }
 
 pre_process() {
@@ -68,6 +87,20 @@ pre_process() {
     if [ ! -d "$CACHE_DIR"/user/generated ]; then
         mkdir -p "$CACHE_DIR"/user/generated
     fi
+}
+
+update_icon_scheme() {
+    local mode_flag="$1"
+    local manager="$SCRIPT_DIR/../theming/icon-theme-manager.sh"
+    [ -x "$manager" ] || return 0
+    bash "$manager" --sync --apply --mode "$mode_flag" --source wallpaper || true
+}
+
+apply_icon_override_safety_net() {
+    local mode_flag="$1"
+    local manager="$SCRIPT_DIR/../theming/icon-theme-manager.sh"
+    [ -x "$manager" ] || return 0
+    bash "$manager" --post-kde --mode "$mode_flag" || true
 }
 
 post_process() {
@@ -100,6 +133,7 @@ apply_named_scheme() {
             return 1
         }
     "$SCRIPT_DIR"/applycolor.sh
+    update_icon_scheme "$mode_flag"
     apply_named_qt &
     "$SCRIPT_DIR/code/material-code-set-color.sh" &
 }
@@ -118,8 +152,8 @@ check_and_prompt_upscale() {
     if [ -f "$SHELL_CONFIG_FILE" ] && [ "$(jq -r '.background.collage.enable // false' "$SHELL_CONFIG_FILE")" == "true" ]; then
         return
     fi
-    min_width_desired="$(monitor_json | jq '([.[].width] | max)' | xargs)"
-    min_height_desired="$(monitor_json | jq '([.[].height] | max)' | xargs)"
+    min_width_desired="$(hyprctl monitors -j | jq '([.[].width] | max)' | xargs)"
+    min_height_desired="$(hyprctl monitors -j | jq '([.[].height] | max)' | xargs)"
 
     if command -v identify &>/dev/null && [ -f "$img" ]; then
         local img_width img_height
@@ -146,7 +180,13 @@ check_and_prompt_upscale() {
                         "Install Upscayl?" \
                         "yay -S upscayl-bin")
                     if [[ "$action2" == "install_upscayl" ]]; then
-                        kitty -1 yay -S upscayl-bin
+                        if command -v yay &>/dev/null; then
+                            kitty -1 yay -S upscayl-bin
+                        elif command -v paru &>/dev/null; then
+                            kitty -1 paru -S upscayl-bin
+                        else
+                            kitty -1 sudo pacman -S upscayl-bin
+                        fi
                         if command -v upscayl &>/dev/null; then
                             nohup upscayl > /dev/null 2>&1 &
                         fi
@@ -161,12 +201,21 @@ CUSTOM_DIR="$XDG_CONFIG_HOME/hypr/custom"
 RESTORE_SCRIPT_DIR="$CUSTOM_DIR/scripts"
 RESTORE_SCRIPT="$RESTORE_SCRIPT_DIR/__restore_video_wallpaper.sh"
 THUMBNAIL_DIR="$RESTORE_SCRIPT_DIR/mpvpaper_thumbnails"
+mkdir -p "$RESTORE_SCRIPT_DIR" "$THUMBNAIL_DIR"
 MPVPAPER_FLAGS="-p -a max"
 VIDEO_OPTS="no-audio loop hwdec=auto scale=bilinear interpolation=no video-sync=display-resample panscan=1.0 video-scale-x=1.0 video-scale-y=1.0 video-align-x=0.5 video-align-y=0.5 load-scripts=no"
 # One control socket per output, so the shell can pause and resume the live
 # wallpaper instead of only being able to kill it.
 MPV_SOCKET_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
 MPV_SOCKET_PREFIX="$MPV_SOCKET_DIR/mpvpaper-"
+
+get_monitors() {
+    if [[ -n "$NIRI_SOCKET" ]] && command -v niri >/dev/null 2>&1; then
+        niri msg -j outputs 2>/dev/null | jq -r 'keys[]'
+    elif [[ -n "$HYPRLAND_INSTANCE_SIGNATURE" ]] && command -v hyprctl >/dev/null 2>&1; then
+        hyprctl monitors -j 2>/dev/null | jq -r '.[] | .name'
+    fi
+}
 
 is_video() {
     local extension="${1##*.}"
@@ -187,11 +236,12 @@ create_restore_script() {
 pkill -f -9 mpvpaper
 rm -f "$MPV_SOCKET_PREFIX"*.sock
 
-if printf '%s %s' "\${XDG_CURRENT_DESKTOP:-}" "\${XDG_SESSION_DESKTOP:-}" | grep -qi niri; then
-    monitors=\$(niri msg -j outputs | jq -r 'keys[]')
+if [[ -n "\$NIRI_SOCKET" ]] && command -v niri >/dev/null 2>&1; then
+    monitors=\$(niri msg -j outputs 2>/dev/null | jq -r 'keys[]')
 else
-    monitors=\$(hyprctl monitors -j | jq -r '.[].name')
+    monitors=\$(hyprctl monitors -j 2>/dev/null | jq -r '.[] | .name')
 fi
+
 for monitor in \$monitors; do
     mpvpaper $MPVPAPER_FLAGS -o "$VIDEO_OPTS input-ipc-server=$MPV_SOCKET_PREFIX\$monitor.sock" "\$monitor" "$video_path" &
     sleep 0.1
@@ -242,10 +292,10 @@ switch() {
         categorize_wallpaper "$imgpath" &
     fi
 
-    read scale screenx screeny screensizey < <(monitor_json | jq '(.[] | select(.focused)) // .[0] | .scale, .x, .y, .height' | xargs)
-    cursorposx=$(hyprctl cursorpos -j 2>/dev/null | jq '.x' 2>/dev/null) || cursorposx=$((screenx + 960))
+    read scale screenx screeny screensizey < <(hyprctl monitors -j | jq '.[] | select(.focused) | .scale, .x, .y, .height' | xargs)
+    cursorposx=$(hyprctl cursorpos -j | jq '.x' 2>/dev/null) || cursorposx=960
     cursorposx=$(bc <<< "scale=0; ($cursorposx - $screenx) * $scale / 1")
-    cursorposy=$(hyprctl cursorpos -j 2>/dev/null | jq '.y' 2>/dev/null) || cursorposy=$((screeny + 540))
+    cursorposy=$(hyprctl cursorpos -j | jq '.y' 2>/dev/null) || cursorposy=540
     cursorposy=$(bc <<< "scale=0; ($cursorposy - $screeny) * $scale / 1")
     cursorposy_inverted=$((screensizey - cursorposy))
 
@@ -298,7 +348,7 @@ switch() {
                 set_wallpaper_path "$imgpath"
 
                 local video_path="$imgpath"
-                monitors=$(monitor_names)
+                monitors=$(hyprctl monitors -j | jq -r '.[] | .name')
                 rm -f "$MPV_SOCKET_PREFIX"*.sock
                 for monitor in $monitors; do
                     mpvpaper $MPVPAPER_FLAGS -o "$VIDEO_OPTS input-ipc-server=$MPV_SOCKET_PREFIX$monitor.sock" "$monitor" "$video_path" &
@@ -433,10 +483,11 @@ switch() {
 
     if [[ -z "$colors_lock_flag" ]]; then
         "$SCRIPT_DIR"/applycolor.sh
+        update_icon_scheme "$mode_flag"
     fi
 
-    max_width_desired="$(monitor_json | jq '([.[].width] | min)' | xargs)"
-    max_height_desired="$(monitor_json | jq '([.[].height] | min)' | xargs)"
+    max_width_desired="$(hyprctl monitors -j | jq '([.[].width] | min)' | xargs)"
+    max_height_desired="$(hyprctl monitors -j | jq '([.[].height] | min)' | xargs)"
     post_process "$max_width_desired" "$max_height_desired" "$imgpath" "$colors_lock_flag"
 }
 

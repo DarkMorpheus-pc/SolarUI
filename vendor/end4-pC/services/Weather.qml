@@ -4,6 +4,7 @@ pragma ComponentBehavior: Bound
 import Quickshell
 import Quickshell.Io
 import QtQuick
+import QtPositioning
 
 import qs.modules.common
 
@@ -14,9 +15,7 @@ Singleton {
     readonly property int fetchInterval: Config.options.bar.weather.fetchInterval * 60 * 1000
     readonly property string city: Config.options.bar.weather.city
     readonly property bool useUSCS: Config.options.bar.weather.useUSCS
-    // QtPositioning is not part of the BlazeOS base image. Keep location
-    // access disabled until a portal/GeoClue implementation is available.
-    readonly property bool gpsActive: false
+    property bool gpsActive: Config.options.bar.weather.enableGPS
 
     onUseUSCSChanged: root.getData()
     onCityChanged: root.getData()
@@ -124,8 +123,11 @@ Singleton {
         return cityName.trim().split(/\s+/).join('+')
     }
 
-    Component.onCompleted: if (Config.options.bar.weather.enableGPS)
-        console.warn("[WeatherService] GPS is unavailable on this build; using the configured city.")
+    Component.onCompleted: {
+        if (!root.gpsActive) return
+        console.info("[WeatherService] Starting GPS service.")
+        positionSource.start()
+    }
 
     Process {
         id: fetcher
@@ -147,6 +149,32 @@ Singleton {
                 } catch (e) {
                     console.error("[WeatherService] JSON parse error:", e.message)
                 }
+            }
+        }
+    }
+
+    PositionSource {
+        id: positionSource
+        updateInterval: root.fetchInterval
+
+        onPositionChanged: {
+            if (position.latitudeValid && position.longitudeValid) {
+                root.location.lat = position.coordinate.latitude
+                root.location.lon = position.coordinate.longitude
+                root.location.valid = true
+                root.getData()
+            } else {
+                root.gpsActive = root.location.valid ? true : false
+                console.error("[WeatherService] Failed to get GPS location.")
+            }
+        }
+
+        onValidityChanged: {
+            if (!positionSource.valid) {
+                positionSource.stop()
+                root.location.valid = false
+                root.gpsActive = false
+                console.error("[WeatherService] Could not acquire valid GPS backend.")
             }
         }
     }

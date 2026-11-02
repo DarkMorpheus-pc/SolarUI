@@ -8,6 +8,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import Quickshell
+import org.kde.syntaxhighlighting
 
 ColumnLayout {
     id: root
@@ -55,7 +56,7 @@ ColumnLayout {
                 font.pixelSize: Appearance.font.pixelSize.small
                 font.weight: Font.DemiBold
                 color: Appearance.colors.colOnLayer2
-                text: root.displayLang || "plain"
+                text: root.displayLang ? Repository.definitionForName(root.displayLang).name : "plain"
             }
 
             Item { Layout.fillWidth: true }
@@ -173,6 +174,7 @@ ColumnLayout {
                 spacing: 0
                 ScrollView {
                     id: codeScrollView
+                    property TouchpadScrollArea _touchpadScroll: TouchpadScrollArea { flickable: codeScrollView.contentItem }
                     Layout.fillWidth: true
                     // Layout.fillHeight: true
                     implicitWidth: parent.width
@@ -239,6 +241,13 @@ ColumnLayout {
                             }
                         }
 
+                        SyntaxHighlighter {
+                            id: highlighter
+                            textEdit: codeTextArea
+                            repository: Repository
+                            definition: Repository.definitionForName(root.displayLang || "plaintext")
+                            theme: Appearance.syntaxHighlightingTheme
+                        }
                     }
                 }
                 Loader {

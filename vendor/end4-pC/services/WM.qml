@@ -37,8 +37,8 @@ Singleton {
         // case "sway":  backend = swayComp.createObject(root); break;
         // case "mango": backend = mangoComp.createObject(root); break;
         default:
-            console.error("[WM] Unsupported compositor: " + root.compositor);
-            backend = null;
+            console.log("[WM] Unknown compositor: " + root.compositor + ", falling back to Hyprland backend");
+            backend = hyprlandComp.createObject(root);
         }
     }
 

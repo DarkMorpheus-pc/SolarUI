@@ -100,9 +100,16 @@ Item {
         anchors.rightMargin: 4
         anchors.topMargin: -1
         anchors.bottomMargin: 4
-        color: ColorUtils.transparentize(artDominantColor, 0.9)
+        color: Config.options.background.widgets.glass.enable ? "transparent" : ColorUtils.transparentize(artDominantColor, 0.9)
         radius: Appearance.rounding.normal
         clip: true
+
+        WindowGlass {
+            anchors.fill: parent
+            cardRadius: parent.radius
+            tint: root.artDominantColor
+            tintStrength: 0
+        }
 
         Image {
             id: blurArtSource

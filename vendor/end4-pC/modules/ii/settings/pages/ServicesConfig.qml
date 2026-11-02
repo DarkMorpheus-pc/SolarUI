@@ -412,7 +412,6 @@ ContentPage {
             title: Translation.tr("Weather")
             GroupedList {
                 ConfigSwitch {
-                    visible: false // QtPositioning is deliberately not shipped in the Fedora/Niri port.
                     buttonIcon: "assistant_navigation"
                     text: Translation.tr("Enable GPS based location")
                     checked: Config.options.bar.weather.enableGPS

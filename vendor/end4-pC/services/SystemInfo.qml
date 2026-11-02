@@ -198,17 +198,7 @@ Singleton {
     Process {
         id: getPackages
         running: false
-        command: ["bash", "-c", `
-            if command -v rpm >/dev/null 2>&1; then
-                native_count=$(rpm -qa 2>/dev/null | wc -l); native_label=rpm
-            elif command -v pacman >/dev/null 2>&1; then
-                native_count=$(pacman -Q 2>/dev/null | wc -l); native_label=pacman
-            else
-                native_count=0; native_label=pkg
-            fi
-            flatpak_count=$(flatpak list 2>/dev/null | wc -l || echo 0)
-            if [ "$flatpak_count" -gt 0 ]; then echo "$native_count $native_label, $flatpak_count fp"; else echo "$native_count $native_label"; fi
-        `]
+        command: ["bash", "-c", "if command -v portadora >/dev/null 2>&1; then pkg_count=$(portadora list 2>/dev/null | wc -l); pkg_label=blz; elif command -v pacman >/dev/null 2>&1; then pkg_count=$(pacman -Q 2>/dev/null | wc -l); pkg_label=pacman; elif command -v rpm >/dev/null 2>&1; then pkg_count=$(rpm -qa 2>/dev/null | wc -l); pkg_label=rpm; elif command -v dpkg-query >/dev/null 2>&1; then pkg_count=$(dpkg-query -f '.\\n' -W 2>/dev/null | wc -l); pkg_label=deb; else pkg_count=0; pkg_label=packages; fi; flatpak_count=$(flatpak list 2>/dev/null | wc -l || echo 0); if [ \"$flatpak_count\" -gt 0 ]; then echo \"$pkg_count $pkg_label, $flatpak_count fp\"; else echo \"$pkg_count $pkg_label\"; fi"]
         stdout: SplitParser { onRead: data => root.packages = data.trim() }
     }
 

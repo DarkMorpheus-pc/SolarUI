@@ -1,16 +1,15 @@
 import QtQuick
+import org.kde.kirigami as Kirigami
 import qs.services
 import qs.modules.common
 
-Image {
+Kirigami.Icon {
     id: root
-
+    
     property real implicitSize: 26
-    property bool animated: true
     implicitWidth: implicitSize
     implicitHeight: implicitSize
-    fillMode: Image.PreserveAspectFit
-    asynchronous: true
-    cache: true
-    smooth: true
+
+    roundToIconSize: false
+    animated: true // It's just fading from one icon to another
 }

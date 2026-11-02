@@ -12,6 +12,7 @@ import QtQuick
 import QtQuick.Window
 import Quickshell
 import Quickshell.Io
+import Quickshell.Hyprland
 
 ShellRoot {
     id: root
@@ -33,8 +34,7 @@ ShellRoot {
                 Config.options.overview.enable = false
             }
 
-            if (WM.compositor === "hyprland" &&
-                Config.options.hyprland.autostartApps.enable &&
+            if (Config.options.hyprland.autostartApps.enable &&
                 Config.options.hyprland.autostartApps.apps.length > 0) {
                 autostartProc.running = true
             }
@@ -45,19 +45,12 @@ ShellRoot {
         MaterialThemeLoader.reapplyTheme()
         Hyprsunset.load()
         FirstRunExperience.load()
-        if (WM.compositor === "hyprland") ConflictKiller.load()
+        ConflictKiller.load()
         Cliphist.refresh()
         Wallpapers.load()
         Football.load()
         Updates.load()
         LyricsService.restartLyrics()
-    }
-
-    // SolarUI supervisor readiness probe. This is deliberately independent
-    // from visual surfaces so a half-loaded QML tree cannot report healthy.
-    IpcHandler {
-        target: "solarui"
-        function ping(): string { return Config.ready && WM.backend !== null ? "ready" : "loading" }
     }
     
     PanelFamilyLoader {

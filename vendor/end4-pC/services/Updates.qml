@@ -7,7 +7,7 @@ import Quickshell
 import Quickshell.Io
 
 /*
- * Distribution-aware system updates service.
+ * System updates service. Supports Portadora (BlazeOS), DNF/Fedora, and Arch checkupdates.
  */
 Singleton {
     id: root
@@ -39,7 +39,7 @@ Singleton {
     Process {
         id: checkAvailabilityProc
         running: Config.ready && Config.options.updates.enableCheck
-        command: ["bash", "-c", "command -v dnf5 || command -v dnf || command -v checkupdates"]
+        command: ["bash", "-c", "command -v portadora >/dev/null 2>&1 || command -v checkupdates >/dev/null 2>&1 || command -v dnf >/dev/null 2>&1"]
         onExited: (exitCode, exitStatus) => {
             root.available = (exitCode === 0);
             firstCheckTimer.start();
@@ -54,24 +54,11 @@ Singleton {
 
     Process {
         id: checkUpdatesProc
-        command: ["bash", "-c", `
-            if command -v dnf5 >/dev/null 2>&1; then
-                dnf5 -q repoquery --upgrades --qf '%{name}' 2>/dev/null | sort -u | wc -l
-            elif command -v dnf >/dev/null 2>&1; then
-                dnf -q repoquery --upgrades --qf '%{name}' 2>/dev/null | sort -u | wc -l
-            elif command -v checkupdates >/dev/null 2>&1; then
-                pacman_count=$(checkupdates 2>/dev/null | wc -l)
-                aur_count=0
-                if command -v yay >/dev/null 2>&1; then aur_count=$(yay -Qua 2>/dev/null | wc -l)
-                elif command -v paru >/dev/null 2>&1; then aur_count=$(paru -Qua 2>/dev/null | wc -l); fi
-                echo $((pacman_count + aur_count))
-            else
-                echo 0
-            fi
-        `]
+        command: ["bash", "-c", "if command -v portadora >/dev/null 2>&1; then echo 0; elif command -v checkupdates >/dev/null 2>&1; then pacman=$(checkupdates 2>/dev/null | wc -l); if command -v yay >/dev/null 2>&1; then aur=$(yay -Qua 2>/dev/null | wc -l); elif command -v paru >/dev/null 2>&1; then aur=$(paru -Qua 2>/dev/null | wc -l); else aur=0; fi; echo $((pacman + aur)); elif command -v dnf >/dev/null 2>&1; then dnf -q check-update 2>/dev/null | awk 'NF >= 3 && $1 ~ /\\./ { count++ } END { print count + 0 }'; else echo 0; fi"]
         stdout: StdioCollector {
             onStreamFinished: {
-                root.count = parseInt(text.trim())
+                const parsed = parseInt(text.trim());
+                root.count = Number.isNaN(parsed) ? 0 : parsed;
             }
         }
     }
