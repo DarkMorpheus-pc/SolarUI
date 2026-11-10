@@ -53,8 +53,8 @@ pub fn launch_omnibar_window() {
             if existing_pid != std::process::id()
                 && std::path::Path::new(&format!("/proc/{existing_pid}")).exists()
             {
-                let _ = Command::new("kill")
-                    .args(["-TERM", &existing_pid.to_string()])
+                let _ = Command::new("sh")
+                    .args(["-c", &format!("kill -TERM {existing_pid} 2>/dev/null || kill -9 {existing_pid} 2>/dev/null")])
                     .status();
                 let _ = std::fs::remove_file(&pid_file);
                 return;
@@ -154,9 +154,10 @@ fn build_omnibar_ui(main_loop: glib::MainLoop) {
         }
 
         .omnibar-close-btn {
-            background-color: rgba(255, 255, 255, 0.08);
-            color: #cbd5e1;
-            border: 1px solid rgba(255, 255, 255, 0.14);
+            background: rgba(239, 68, 68, 0.20);
+            background-image: none;
+            color: #fca5a5;
+            border: 1px solid rgba(239, 68, 68, 0.40);
             border-radius: 12px;
             padding: 8px 14px;
             margin-bottom: 12px;
@@ -164,9 +165,10 @@ fn build_omnibar_ui(main_loop: glib::MainLoop) {
             font-weight: 700;
         }
         .omnibar-close-btn:hover {
-            background-color: rgba(239, 68, 68, 0.25);
-            color: #fca5a5;
-            border-color: rgba(239, 68, 68, 0.45);
+            background: rgba(239, 68, 68, 0.38);
+            background-image: none;
+            color: #ffffff;
+            border-color: rgba(239, 68, 68, 0.65);
         }
     "#;
     provider.load_from_string(css);
@@ -514,7 +516,9 @@ fn execute_omnibar_item(item: &OmnibarItem) {
         }
         OmnibarItemType::ProcessKill(pid, name) => {
             println!("Killing process: {} (PID: {})", name, pid);
-            let _ = Command::new("kill").arg("-9").arg(pid.to_string()).status();
+            let _ = Command::new("sh")
+                .args(["-c", &format!("kill -9 {pid} 2>/dev/null")])
+                .status();
             let _ = Command::new("notify-send")
                 .args(["-a", "SolarUI Omnibar", "İşlem Sonlandırıldı", &format!("{} (PID: {})", name, pid)])
                 .spawn();
