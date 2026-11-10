@@ -41,18 +41,41 @@ pub struct OmnibarItem {
     pub item_type: OmnibarItemType,
 }
 
+fn omnibar_pid_path() -> std::path::PathBuf {
+    let runtime_dir = std::env::var("XDG_RUNTIME_DIR").unwrap_or_else(|_| "/tmp".to_string());
+    std::path::PathBuf::from(runtime_dir).join("solar-omnibar.pid")
+}
+
 pub fn launch_omnibar_window() {
+    let pid_file = omnibar_pid_path();
+    if let Ok(existing_str) = std::fs::read_to_string(&pid_file) {
+        if let Ok(existing_pid) = existing_str.trim().parse::<u32>() {
+            if existing_pid != std::process::id()
+                && std::path::Path::new(&format!("/proc/{existing_pid}")).exists()
+            {
+                let _ = Command::new("kill")
+                    .args(["-TERM", &existing_pid.to_string()])
+                    .status();
+                let _ = std::fs::remove_file(&pid_file);
+                return;
+            }
+        }
+    }
+    let _ = std::fs::write(&pid_file, format!("{}\n", std::process::id()));
+
     glib::set_prgname(Some("solar-omnibar"));
     glib::set_application_name("SolarUI Omnibar");
 
     if let Err(err) = gtk4::init() {
         eprintln!("Failed to initialize GTK4: {}", err);
+        let _ = std::fs::remove_file(&pid_file);
         return;
     }
 
     let main_loop = glib::MainLoop::new(None, false);
     build_omnibar_ui(main_loop.clone());
     main_loop.run();
+    let _ = std::fs::remove_file(&pid_file);
 }
 
 fn build_omnibar_ui(main_loop: glib::MainLoop) {
@@ -129,6 +152,22 @@ fn build_omnibar_ui(main_loop: glib::MainLoop) {
             margin-top: 8px;
             padding-left: 6px;
         }
+
+        .omnibar-close-btn {
+            background-color: rgba(255, 255, 255, 0.08);
+            color: #cbd5e1;
+            border: 1px solid rgba(255, 255, 255, 0.14);
+            border-radius: 12px;
+            padding: 8px 14px;
+            margin-bottom: 12px;
+            font-size: 13px;
+            font-weight: 700;
+        }
+        .omnibar-close-btn:hover {
+            background-color: rgba(239, 68, 68, 0.25);
+            color: #fca5a5;
+            border-color: rgba(239, 68, 68, 0.45);
+        }
     "#;
     provider.load_from_string(css);
 
@@ -149,6 +188,7 @@ fn build_omnibar_ui(main_loop: glib::MainLoop) {
 
     let loop_quit = main_loop.clone();
     window.connect_close_request(move |_| {
+        let _ = std::fs::remove_file(omnibar_pid_path());
         loop_quit.quit();
         glib::Propagation::Proceed
     });
@@ -156,11 +196,28 @@ fn build_omnibar_ui(main_loop: glib::MainLoop) {
     let root_box = GtkBox::new(Orientation::Vertical, 0);
     root_box.add_css_class("omnibar-card");
 
-    // Search input
+    // Search input + visible Close (Esc) button row
+    let top_row = GtkBox::new(Orientation::Horizontal, 8);
     let entry = Entry::new();
     entry.add_css_class("omnibar-entry");
-    entry.set_placeholder_text(Some("Komut, pano (cb), matematik veya kur/kripto çevir... (örn: cb, 100 usd to try, 1 btc in usd, kill, berp)"));
-    root_box.append(&entry);
+    entry.set_hexpand(true);
+    entry.set_placeholder_text(Some("Komut, uygulama, pano (cb), matematik veya kur çevir... (örn: store, install, cb, 100 usd to try)"));
+    top_row.append(&entry);
+
+    let close_btn = gtk4::Button::with_label("✕ Esc");
+    close_btn.add_css_class("omnibar-close-btn");
+    close_btn.set_tooltip_text(Some("Omnibar'ı Kapat (Esc veya Super+Space)"));
+    let win_close_btn = window.downgrade();
+    let loop_close_btn = main_loop.clone();
+    close_btn.connect_clicked(move |_| {
+        let _ = std::fs::remove_file(omnibar_pid_path());
+        if let Some(w) = win_close_btn.upgrade() {
+            w.close();
+        }
+        loop_close_btn.quit();
+    });
+    top_row.append(&close_btn);
+    root_box.append(&top_row);
 
     // Results container
     let scrolled = ScrolledWindow::builder()
@@ -200,6 +257,7 @@ fn build_omnibar_ui(main_loop: glib::MainLoop) {
 
     key_controller.connect_key_pressed(move |_ctrl, key, _code, _modifier| {
         if key == gdk::Key::Escape {
+            let _ = std::fs::remove_file(omnibar_pid_path());
             if let Some(win) = win_weak.upgrade() {
                 win.close();
             }
@@ -212,7 +270,6 @@ fn build_omnibar_ui(main_loop: glib::MainLoop) {
                 let cur = list.selected_row().map(|r| r.index()).unwrap_or(-1);
                 if let Some(next_row) = list.row_at_index(cur + 1) {
                     list.select_row(Some(&next_row));
-                    next_row.grab_focus();
                 }
             }
             return glib::Propagation::Stop;
@@ -224,7 +281,6 @@ fn build_omnibar_ui(main_loop: glib::MainLoop) {
                 if cur > 0 {
                     if let Some(prev_row) = list.row_at_index(cur - 1) {
                         list.select_row(Some(&prev_row));
-                        prev_row.grab_focus();
                     }
                 }
             }
@@ -244,6 +300,7 @@ fn build_omnibar_ui(main_loop: glib::MainLoop) {
 
             if let Some(item) = item_opt {
                 execute_omnibar_item(&item);
+                let _ = std::fs::remove_file(omnibar_pid_path());
                 if let Some(win) = win_weak.upgrade() {
                     win.close();
                 }
@@ -254,7 +311,7 @@ fn build_omnibar_ui(main_loop: glib::MainLoop) {
 
         glib::Propagation::Proceed
     });
-    entry.add_controller(key_controller);
+    window.add_controller(key_controller);
 
     // Entry activate handler (Enter key inside GtkEntry)
     let win_act = window.downgrade();
@@ -641,17 +698,18 @@ fn generate_omnibar_items(raw_query: &str, apps: &[AppInfo]) -> Vec<OmnibarItem>
 
     // 4. System quick actions
     let sys_commands = [
-        ("oobe", "BlazeOS Apple 'Hello' Karşılama ve Kurulum Asistanı", "Dil, bölge, kullanıcı ve masaüstü ilk kurulum sihirbazı", "/usr/bin/blaze-setup", "system-software-install"),
-        ("setup", "İlk Kurulum Asistanı (OOBE)", "Sistem ayarlarını ve kullanıcı tercihlerini yapılandır", "/usr/bin/blaze-setup", "system-software-install"),
-        ("game", "Blaze GameZone Tam Ekran Oyun Kabuğu", "Steam Deck / Xbox UI Konsol Modunu Başlat", "solar-shell gamezone", "input-gaming"),
-        ("berp", "Blaze Emergency Recovery Protocol (BERP)", "Kurtarma ve Zaman Makinesi Konsolunu Başlat", "ptyxis -- blaze-recovery", "system-error"),
-        ("kurtarma", "Blaze Acil Kurtarma ve Zaman Makinesi", "Sistem geri yükleme ve donanım denetim konsolu", "ptyxis -- blaze-recovery", "system-error"),
+        ("store", "FireHub Uygulama Mağazası", "Portadora (.blz) ve Flathub uygulama mağazasını aç", "firehub", "system-software-install"),
+        ("install", "BlazeOS Sistem Kurucusu (Solar Installer)", "BlazeOS'u sabit diske grafiksel sihirbaz ile kur", "solar-shell installer", "drive-harddisk"),
+        ("welcome", "BlazeOS Karşılama & Rehber Merkezi", "Kısayol rehberi, kabuk seçici ve sistem araçları", "solar-shell welcome", "system-help"),
+        ("game", "Blaze GameZone Tam Ekran Oyun Kabuğu", "Steam Deck / Xbox UI Konsol Modunu ve Proton-GE Yöneticisini Başlat", "solar-shell gamezone", "input-gaming"),
+        ("berp", "Blaze Emergency Recovery Protocol (BERP)", "Kurtarma, Portadora Doğrulama ve Zaman Makinesi Konsolunu Başlat", "alacritty -e blaze-recovery", "system-error"),
+        ("kurtarma", "Blaze Acil Kurtarma ve Zaman Makinesi", "Sistem geri yükleme ve donanım denetim konsolu", "alacritty -e blaze-recovery", "system-error"),
         ("konami", "Blaze SolarEvolution Retro Modu (Easter Egg)", "80'ler CRT ve Matrix atmosferini tetikle", "solar-shell konami", "input-gaming"),
         ("season", "Mevsimsel Atmosfer ve Renk Teması", "Gündönümü ve ekinoks renk tonunu göster", "solar-shell season", "preferences-desktop-wallpaper"),
-        ("theme", "Masaüstü Kabuk Motorunu Değiştir", "Noctalia ve Caelestia arasında geçiş yap", "solar-shell switch caelestia", "preferences-desktop-theme"),
+        ("theme", "Masaüstü Kabuk Motorunu Değiştir", "Noctalia, Caelestia ve end4-pC arasında geçiş yap", "solar-shell settings", "preferences-desktop-theme"),
         ("settings", "SolarUI ve Masaüstü Ayarları", "Görev çubuğu, tema, ekran ve sistem tercihlerini yönet", "solar-shell settings", "preferences-system"),
         ("ekran", "Ekran Çözünürlüğü ve Bağımsız DPI Ölçeği", "Çoklu monitör ve arayüz boyutlandırma ayarları", "solar-shell settings", "video-display"),
-        ("pano", "Pano Geçmişi Yöneticisi", "Kopyalanan metinleri ve panoyu filtrele (cb)", "fuzzel-clipboard", "edit-paste"),
+        ("pano", "Pano Geçmişi Yöneticisi", "Kopyalanan metinleri ve panoyu filtrele (cb)", "solar-shell omnibar", "edit-paste"),
         ("lock", "Ekranı Kilitle", "Oturumu güvenle kilitle", "solar-lock", "system-lock-screen"),
         ("reboot", "Sistemi Yeniden Başlat", "Bilgisayarı baştan başlat", "systemctl reboot", "system-reboot"),
         ("power", "Bilgisayarı Kapat", "Sistemi güvenle kapat", "systemctl poweroff", "system-shutdown"),
