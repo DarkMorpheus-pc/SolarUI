@@ -145,8 +145,8 @@ impl Language {
 
     pub fn bore_kernel(&self) -> &'static str {
         match self {
-            Language::TR => "1,420 G • BORE Çekirdeği",
-            Language::EN => "1,420 G • BORE Kernel",
+            Language::TR => "Linux 7.2.9 • sched_ext & NTSYNC",
+            Language::EN => "Linux 7.2.9 • sched_ext & NTSYNC",
         }
     }
 
@@ -506,7 +506,7 @@ pub fn open_browser_url(url: &str) {
 pub fn is_game_installed(steam_app_id: Option<&str>, exec: &str, id: &str) -> bool {
     // 1. Steam App ID check
     if let Some(app_id) = steam_app_id {
-        let home = std::env::var("HOME").unwrap_or_else(|_| "/home/darkmorpheus".to_string());
+        let home = std::env::var("HOME").unwrap_or_else(|_| "/home/blaze".to_string());
         let steam_dirs = [
             PathBuf::from(&home).join(".steam/steam/steamapps"),
             PathBuf::from(&home).join(".local/share/Steam/steamapps"),
@@ -1736,8 +1736,8 @@ fn build_gamezone_ui(main_loop: glib::MainLoop) {
     cso_title.add_css_class("xbox-modal-card-title");
     cso_title.set_halign(gtk4::Align::Start);
     let cso_desc = Label::new(Some(match lang {
-        Language::TR => "Yerel Uygulamalar & Emülatörler",
-        Language::EN => "Local Apps & Emulators",
+        Language::TR => "FireHub Mağaza • Portadora & Flathub",
+        Language::EN => "FireHub Store • Portadora & Flathub",
     }));
     cso_desc.add_css_class("xbox-modal-card-desc");
     cso_desc.set_halign(gtk4::Align::Start);
@@ -1745,7 +1745,9 @@ fn build_gamezone_ui(main_loop: glib::MainLoop) {
     cso_box.append(&cso_desc);
     card_soft.set_child(Some(&cso_box));
     card_soft.connect_clicked(|_| {
-        let _ = Command::new("gnome-software").spawn();
+        if Command::new("firehub").spawn().is_err() {
+            let _ = Command::new("/opt/FireHub/firehub").spawn();
+        }
     });
     store_cards_row.append(&card_soft);
 
@@ -1778,24 +1780,24 @@ fn build_gamezone_ui(main_loop: glib::MainLoop) {
 
     let set_cards_row = GtkBox::new(Orientation::Horizontal, 14);
 
-    // Setting 1: ProtonUp-Qt
+    // Setting 1: Built-in Proton-GE Manager
     let card_set_proton = Button::new();
     card_set_proton.add_css_class("xbox-modal-card");
     let cp_box = GtkBox::new(Orientation::Vertical, 4);
-    let cp_title = Label::new(Some("ProtonUp-Qt"));
+    let cp_title = Label::new(Some("Blaze Proton-GE Yöneticisi"));
     cp_title.add_css_class("xbox-modal-card-title");
     cp_title.set_halign(gtk4::Align::Start);
     let cp_desc = Label::new(Some(match lang {
-        Language::TR => "GE-Proton & Wine Uyumluluk Yöneticisi",
-        Language::EN => "GE-Proton & Wine Compatibility Manager",
+        Language::TR => "GE-Proton & NTSYNC Uyumluluk Yöneticisi",
+        Language::EN => "GE-Proton & NTSYNC Compatibility Manager",
     }));
     cp_desc.add_css_class("xbox-modal-card-desc");
     cp_desc.set_halign(gtk4::Align::Start);
     cp_box.append(&cp_title);
     cp_box.append(&cp_desc);
     card_set_proton.set_child(Some(&cp_box));
-    card_set_proton.connect_clicked(|_| {
-        let _ = Command::new("protonup-qt").spawn();
+    card_set_proton.connect_clicked(move |_| {
+        open_proton_ge_manager_modal(lang);
     });
     set_cards_row.append(&card_set_proton);
 
@@ -1823,19 +1825,19 @@ fn build_gamezone_ui(main_loop: glib::MainLoop) {
     });
     set_cards_row.append(&card_set_solar);
 
-    // Setting 3: BORE Performance Governor
+    // Setting 3: sched_ext & NTSYNC Performance Governor
     let card_set_perf = Button::new();
     card_set_perf.add_css_class("xbox-modal-card");
     let cperf_box = GtkBox::new(Orientation::Vertical, 4);
     let cperf_title = Label::new(Some(match lang {
-        Language::TR => "BORE & Güç Profili",
-        Language::EN => "BORE & Power Profile",
+        Language::TR => "sched_ext & NTSYNC Güç Profili",
+        Language::EN => "sched_ext & NTSYNC Power Profile",
     }));
     cperf_title.add_css_class("xbox-modal-card-title");
     cperf_title.set_halign(gtk4::Align::Start);
     let cperf_desc = Label::new(Some(match lang {
-        Language::TR => "Düşük Gecikmeli Oyun Çekirdeği Aktif",
-        Language::EN => "Low-Latency Gaming Kernel Active",
+        Language::TR => "Linux 7.2.9 Düşük Gecikmeli Oyun Çekirdeği Aktif",
+        Language::EN => "Linux 7.2.9 Low-Latency Gaming Kernel Active",
     }));
     cperf_desc.add_css_class("xbox-modal-card-desc");
     cperf_desc.set_halign(gtk4::Align::Start);
@@ -1845,7 +1847,7 @@ fn build_gamezone_ui(main_loop: glib::MainLoop) {
     card_set_perf.connect_clicked(|_| {
         activate_gaming_optimizations();
         let _ = Command::new("notify-send")
-            .args(["-a", "Blaze GameZone", "-i", "preferences-system", "Performans Modu", "BORE Düşük Gecikme Profili yenilendi."])
+            .args(["-a", "Blaze GameZone", "-i", "preferences-system", "Performans Modu", "sched_ext + NTSYNC Düşük Gecikme Profili etkinleştirildi."])
             .spawn();
     });
     set_cards_row.append(&card_set_perf);
@@ -2038,7 +2040,7 @@ fn build_gamezone_ui(main_loop: glib::MainLoop) {
     b2_content.add_css_class("xbox-bento-overlay-box");
     b2_content.set_valign(gtk4::Align::End);
 
-    let b2_tag = Label::new(Some("PERFORMANCE & BORE"));
+    let b2_tag = Label::new(Some("SCHED_EXT & NTSYNC"));
     b2_tag.add_css_class("xbox-bento-tag");
     b2_tag.set_halign(gtk4::Align::Start);
 
@@ -2046,7 +2048,7 @@ fn build_gamezone_ui(main_loop: glib::MainLoop) {
     b2_title.add_css_class("xbox-bento-title");
     b2_title.set_halign(gtk4::Align::Start);
 
-    let b2_sub = Label::new(Some("BORE Scheduler • Low Latency"));
+    let b2_sub = Label::new(Some("Linux 7.2.9 • eBPF & NTSYNC"));
     b2_sub.add_css_class("xbox-bento-subtitle");
     b2_sub.set_halign(gtk4::Align::Start);
 
@@ -2057,12 +2059,13 @@ fn build_gamezone_ui(main_loop: glib::MainLoop) {
     bento_perf.set_child(Some(&bento2_overlay));
 
     bento_perf.connect_clicked(|_| {
+        activate_gaming_optimizations();
         let _ = Command::new("notify-send")
             .args([
                 "-a", "Blaze GameZone",
                 "-i", "preferences-system",
                 "Performans Modu",
-                "BORE Düşük Gecikmeli Oyun Çekirdeği devrede.",
+                "Linux 7.2.9 sched_ext & NTSYNC Oyun Çekirdeği devrede.",
             ])
             .spawn();
     });
@@ -2142,7 +2145,7 @@ fn build_gamezone_ui(main_loop: glib::MainLoop) {
     b4_title.add_css_class("xbox-bento-title");
     b4_title.set_halign(gtk4::Align::Start);
 
-    let b4_sub = Label::new(Some("ProtonUp-Qt • Gamepad Config"));
+    let b4_sub = Label::new(Some("Blaze Proton-GE • Gamepad Config"));
     b4_sub.add_css_class("xbox-bento-subtitle");
     b4_sub.set_halign(gtk4::Align::Start);
 
@@ -2152,8 +2155,8 @@ fn build_gamezone_ui(main_loop: glib::MainLoop) {
     bento4_overlay.add_overlay(&b4_content);
     bento_pro.set_child(Some(&bento4_overlay));
 
-    bento_pro.connect_clicked(|_| {
-        let _ = Command::new("protonup-qt").spawn();
+    bento_pro.connect_clicked(move |_| {
+        open_proton_ge_manager_modal(lang);
     });
     bento_row.append(&bento_pro);
 
@@ -3357,19 +3360,183 @@ fn get_live_system_metrics() -> (String, String, String) {
     (format!("18%"), ram_str, format!("60"))
 }
 
+fn open_proton_ge_manager_modal(lang: Language) {
+    // If external protonup-qt exists and user installed it, we still offer our native GTK4 manager
+    let win = Window::builder()
+        .title(match lang {
+            Language::TR => "Blaze Proton-GE & Uyumluluk Yöneticisi",
+            Language::EN => "Blaze Proton-GE & Compatibility Manager",
+        })
+        .default_width(640)
+        .default_height(440)
+        .modal(true)
+        .build();
+
+    let root = GtkBox::new(Orientation::Vertical, 14);
+    root.set_margin_top(20);
+    root.set_margin_bottom(20);
+    root.set_margin_start(22);
+    root.set_margin_end(22);
+
+    let hdr = Label::new(Some(match lang {
+        Language::TR => "Blaze Proton-GE & NTSYNC Uyumluluk Yöneticisi",
+        Language::EN => "Blaze Proton-GE & NTSYNC Compatibility Manager",
+    }));
+    hdr.add_css_class("xbox-apps-header");
+    hdr.set_halign(gtk4::Align::Start);
+    root.append(&hdr);
+
+    let home = std::env::var("HOME").unwrap_or_else(|_| "/home/blaze".to_string());
+    let compat_dir = PathBuf::from(&home).join(".steam/root/compatibilitytools.d");
+    let _ = std::fs::create_dir_all(&compat_dir);
+
+    let mut installed = Vec::new();
+    if let Ok(entries) = std::fs::read_dir(&compat_dir) {
+        for e in entries.flatten() {
+            if e.path().is_dir() {
+                installed.push(e.file_name().to_string_lossy().to_string());
+            }
+        }
+    }
+    installed.sort();
+
+    let ntsync_ok = Path::new("/dev/ntsync").exists();
+    let scx_ok = Path::new("/sys/kernel/sched_ext").exists();
+    let status_text = format!(
+        "• Hedef Dizin: {}\n• Çekirdek NTSYNC (/dev/ntsync): {}\n• Çekirdek sched_ext (eBPF): {}\n• Kurulu Proton-GE Sürümleri: {}",
+        compat_dir.display(),
+        if ntsync_ok { "AKTİF (Hazır)" } else { "Modül Bekleniyor (modprobe ntsync)" },
+        if scx_ok { "AKTİF (Hazır)" } else { "Standart EEVDF Zamanlayıcı" },
+        if installed.is_empty() { "Henüz kurulu GE-Proton yok".to_string() } else { installed.join(", ") }
+    );
+
+    let info_lbl = Label::new(Some(&status_text));
+    info_lbl.set_halign(gtk4::Align::Start);
+    info_lbl.set_wrap(true);
+    root.append(&info_lbl);
+
+    let prog_lbl = Label::new(Some(match lang {
+        Language::TR => "En son GE-Proton sürümünü GitHub üzerinden doğrudan Steam uyumluluk dizinine indirebilirsiniz.",
+        Language::EN => "Download and extract the latest GE-Proton release directly into your Steam compatibilitytools.d directory.",
+    }));
+    prog_lbl.set_halign(gtk4::Align::Start);
+    prog_lbl.set_wrap(true);
+    root.append(&prog_lbl);
+
+    let btn_row = GtkBox::new(Orientation::Horizontal, 12);
+    let dl_btn = Button::with_label(match lang {
+        Language::TR => "En Güncel GE-Proton Sürümünü İndir & Kur",
+        Language::EN => "Download & Install Latest GE-Proton",
+    });
+    dl_btn.add_css_class("xbox-apps-close-btn");
+
+    let prog_lbl_clone = prog_lbl.clone();
+    let compat_clone = compat_dir.clone();
+    dl_btn.connect_clicked(move |b| {
+        b.set_sensitive(false);
+        prog_lbl_clone.set_text("GitHub API üzerinden en son GloriousEggroll/proton-ge-custom sürümü sorgulanıyor...");
+        let (tx, rx) = async_channel::unbounded::<(String, bool)>();
+        let target_dir = compat_clone.clone();
+        std::thread::spawn(move || {
+            let script = format!(
+                r#"set -e
+mkdir -p "{dir}"
+API_JSON=$(curl -fsSL https://api.github.com/repos/GloriousEggroll/proton-ge-custom/releases/latest)
+TAR_URL=$(printf '%s' "$API_JSON" | grep -oE 'https://github.com/GloriousEggroll/proton-ge-custom/releases/download/[^"]+\.tar\.gz' | head -n 1)
+TAG_NAME=$(printf '%s' "$API_JSON" | grep -oE '"tag_name":\s*"[^"]+"' | head -n 1 | cut -d'"' -f4)
+if [ -z "$TAR_URL" ]; then
+    echo "ERR:GitHub API'den GE-Proton indirme bağlantısı alınamadı."
+    exit 1
+fi
+echo "INFO:$TAG_NAME indiriliyor ve {dir} dizinine açılıyor..."
+curl -fL "$TAR_URL" | tar -xz -C "{dir}"
+echo "OK:$TAG_NAME başarıyla kuruldu! Steam'i yeniden başlattığınızda Uyumluluk sekmesinde görünecektir."
+"#,
+                dir = target_dir.display()
+            );
+            match Command::new("sh").arg("-c").arg(&script).output() {
+                Ok(out) if out.status.success() => {
+                    let msg = String::from_utf8_lossy(&out.stdout).lines().last().unwrap_or("Tamamlandı").to_string();
+                    let _ = tx.send_blocking((msg, true));
+                }
+                Ok(out) => {
+                    let err = String::from_utf8_lossy(&out.stderr).to_string();
+                    let _ = tx.send_blocking((format!("Hata: {}", err.trim()), true));
+                }
+                Err(e) => {
+                    let _ = tx.send_blocking((format!("İndirme başlatılamadı: {}", e), true));
+                }
+            }
+        });
+
+        let lbl_ui = prog_lbl_clone.clone();
+        let btn_ui = b.clone();
+        glib::MainContext::default().spawn_local(async move {
+            while let Ok((msg, done)) = rx.recv().await {
+                lbl_ui.set_text(&msg);
+                if done {
+                    btn_ui.set_sensitive(true);
+                }
+            }
+        });
+    });
+    btn_row.append(&dl_btn);
+
+    let close_btn = Button::with_label(match lang {
+        Language::TR => "Kapat",
+        Language::EN => "Close",
+    });
+    close_btn.add_css_class("xbox-apps-close-btn");
+    let win_weak = win.downgrade();
+    close_btn.connect_clicked(move |_| {
+        if let Some(w) = win_weak.upgrade() {
+            w.close();
+        }
+    });
+    btn_row.append(&close_btn);
+
+    root.append(&btn_row);
+    win.set_child(Some(&root));
+    win.present();
+}
+
 fn activate_gaming_optimizations() {
-    println!("Activating Blaze GameZone Low-Latency Performance Mode...");
-    let _ = Command::new("powerprofilesctl").args(["set", "performance"]).status();
-    let _ = Command::new("sh")
-        .arg("-c")
-        .arg("echo performance | tee /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor 2>/dev/null || true")
-        .status();
+    println!("Activating Blaze GameZone Low-Latency Performance Mode (sched_ext + NTSYNC)...");
+    if Command::new("sudo")
+        .args(["-n", "/usr/bin/blaze-gamemode", "on"])
+        .status()
+        .is_err()
+    {
+        let _ = Command::new("powerprofilesctl").args(["set", "performance"]).status();
+        let _ = Command::new("sudo")
+            .args([
+                "-n",
+                "sh",
+                "-c",
+                "for g in /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor; do [ -w \"$g\" ] && echo performance > \"$g\"; done; sysctl -w kernel.split_lock_mitigate=0 >/dev/null 2>&1 || true; modprobe ntsync 2>/dev/null || true",
+            ])
+            .status();
+    }
     let _ = crate::delight::play_acoustic_feedback("easter-egg");
 }
 
 fn restore_normal_optimizations() {
     println!("Restoring balanced power and scheduler profile...");
-    let _ = Command::new("powerprofilesctl").args(["set", "balanced"]).status();
+    if Command::new("sudo")
+        .args(["-n", "/usr/bin/blaze-gamemode", "off"])
+        .status()
+        .is_err()
+    {
+        let _ = Command::new("powerprofilesctl").args(["set", "balanced"]).status();
+        let _ = Command::new("sudo")
+            .args([
+                "-n",
+                "sh",
+                "-c",
+                "for g in /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor; do [ -w \"$g\" ] && echo schedutil > \"$g\" 2>/dev/null || echo powersave > \"$g\" 2>/dev/null || true; done",
+            ])
+            .status();
+    }
 }
 
 #[cfg(test)]

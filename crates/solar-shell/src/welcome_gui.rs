@@ -239,15 +239,26 @@ fn build_welcome_ui(main_loop: glib::MainLoop) {
     });
     bottom_box.append(&check);
 
-    let is_live_installer = (std::path::Path::new("/run/initramfs/live").exists()
+    let is_blaze_live = std::path::Path::new("/run/live/media").exists()
+        || std::path::Path::new("/run/initramfs/live").exists()
         || std::path::Path::new("/dev/mapper/live-base").exists()
+        || std::env::var("BLAZE_LIVE").map(|v| v == "1").unwrap_or(false)
         || std::fs::read_to_string("/proc/cmdline")
-            .map(|c| c.contains("rd.live.image"))
-            .unwrap_or(false))
-        && std::path::Path::new("/usr/bin/liveinst").exists();
+            .map(|c| c.contains("blaze.live=1") || c.contains("rd.live.image"))
+            .unwrap_or(false);
 
-    if is_live_installer {
-        let install_btn = Button::with_label("Sabit Diske Kur (Anaconda)");
+    let has_solar_installer = std::path::Path::new("/usr/bin/solar-installer").exists();
+    let has_legacy_liveinst = std::path::Path::new("/usr/bin/liveinst").exists();
+
+    let store_btn = Button::with_label("FireHub Mağaza");
+    store_btn.add_css_class("install-btn");
+    store_btn.connect_clicked(|_| {
+        let _ = std::process::Command::new("firehub").spawn();
+    });
+    bottom_box.append(&store_btn);
+
+    if is_blaze_live && (has_solar_installer || has_legacy_liveinst) {
+        let install_btn = Button::with_label("BlazeOS'u Diske Kur (Solar Installer)");
         install_btn.add_css_class("install-btn");
         let win_weak_inst = window.downgrade();
         let loop_inst = main_loop.clone();
@@ -255,7 +266,13 @@ fn build_welcome_ui(main_loop: glib::MainLoop) {
             if let Some(win) = win_weak_inst.upgrade() {
                 win.close();
             }
-            let _ = std::process::Command::new("/usr/bin/liveinst").spawn();
+            if has_solar_installer {
+                let _ = std::process::Command::new("solar-shell")
+                    .arg("installer")
+                    .spawn();
+            } else {
+                let _ = std::process::Command::new("/usr/bin/liveinst").spawn();
+            }
             loop_inst.quit();
         });
         bottom_box.append(&install_btn);

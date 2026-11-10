@@ -17,6 +17,7 @@ pub mod welcome_gui;
 pub mod delight;
 pub mod omnibar;
 pub mod gamezone_gui;
+pub mod installer_gui;
 
 use anyhow::Result;
 use apps::scan_desktop_applications;
@@ -103,6 +104,8 @@ async fn main() -> Result<()> {
         "gamezone"
     } else if bin_name.ends_with("solar-omnibar") || bin_name.ends_with("omnibar") {
         "omnibar"
+    } else if bin_name.ends_with("solar-installer-gui") {
+        "installer"
     } else {
         "run"
     };
@@ -222,10 +225,11 @@ async fn main() -> Result<()> {
             let _watchdog_handle = supervisor.start_watchdog_loop();
 
             let cfg = SolarConfig::load();
-            let is_live = std::path::Path::new("/run/initramfs/live").exists()
+            let is_live = std::path::Path::new("/run/live/media").exists()
+                || std::path::Path::new("/run/initramfs/live").exists()
                 || std::path::Path::new("/dev/mapper/live-base").exists()
                 || std::fs::read_to_string("/proc/cmdline")
-                    .map(|c| c.contains("rd.live.image"))
+                    .map(|c| c.contains("blaze.live=1") || c.contains("rd.live.image"))
                     .unwrap_or(false);
             if cfg.shortcuts_hud.show_at_startup || is_live {
                 std::thread::spawn(|| {
@@ -258,6 +262,13 @@ async fn main() -> Result<()> {
             info!("Launching SolarUI Welcome & Shortcuts HUD...");
             tokio::task::block_in_place(|| {
                 welcome_gui::launch_welcome_window();
+            });
+            Ok(())
+        }
+        "installer" | "install-os" => {
+            info!("Launching SolarUI Graphical OS Installer...");
+            tokio::task::block_in_place(|| {
+                installer_gui::launch_installer_window();
             });
             Ok(())
         }

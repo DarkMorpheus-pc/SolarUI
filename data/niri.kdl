@@ -33,6 +33,7 @@ input {
 
 output "eDP-1" {
     scale 1.0
+    variable-refresh-rate on-demand=true
 }
 
 output "Virtual-1" {
@@ -119,14 +120,20 @@ window-rule {
     }
 }
 
-// Installer & Dialog window rules: Center Anaconda and prevent full-screen corner trapping
+// Installer & Dialog window rules: Center Solar Installer / Anaconda and prevent full-screen corner trapping
 window-rule {
-    match app-id=r#"^(liveinst|anaconda|org\.fedoraproject\.Anaconda.*|Anaconda)$"#
+    match app-id=r#"^(solar-installer-gui|liveinst|anaconda|org\.fedoraproject\.Anaconda.*|Anaconda)$"#
     open-floating true
     default-column-width { proportion 0.88; }
     default-window-height { proportion 0.88; }
-    geometry-corner-radius 12
+    geometry-corner-radius 16
     clip-to-geometry true
+}
+
+// Adaptive Sync (VRR) for Fullscreen Games & Steam Proton
+window-rule {
+    match app-id=r#"^(steam_app_.*|gamescope|cs2|dota2|beamng.*|solar-gamezone)$"#
+    variable-refresh-rate true
 }
 
 // Default primary workspace and dedicated background workspace for parked/minimized windows
@@ -317,6 +324,7 @@ binds {
     // ── Quick App Launchers ────────────────────────────────────────
     Mod+Return { spawn "alacritty"; }
     Ctrl+Alt+T { spawn "alacritty"; }
+    Mod+H      { spawn "firehub"; }
     Mod+E      { spawn "nautilus"; }
     Mod+B      { spawn "google-chrome-stable"; }
 

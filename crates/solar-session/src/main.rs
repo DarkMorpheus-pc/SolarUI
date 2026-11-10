@@ -136,6 +136,22 @@ fn main() -> Result<()> {
         });
     }
 
+    // 4.5. Apply OOM Killer Shield (-500) & Ensure Audio/Portal Daemons (PipeWire + WirePlumber)
+    let _ = std::fs::write("/proc/self/oom_score_adj", "-500");
+    for daemon in ["pipewire", "wireplumber"] {
+        let running = Command::new("pgrep")
+            .args(["-x", daemon])
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false);
+        if !running {
+            if let Some(bin) = find_binary(daemon) {
+                info!("Starting multimedia session daemon: {:?}", bin);
+                let _ = Command::new(bin).spawn();
+            }
+        }
+    }
+
     // 5. Exec into Niri compositor
     let niri_bin = find_binary("niri").unwrap_or_else(|| PathBuf::from("/usr/bin/niri"));
     if !niri_bin.exists() {

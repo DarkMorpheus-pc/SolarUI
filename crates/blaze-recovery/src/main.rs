@@ -243,22 +243,37 @@ fn check_recovery_triggers() -> (u32, bool) {
     let mut counter = 0;
     let mut requested = false;
 
-    // Check grubenv if accessible
-    if let Ok(output) = Command::new("grub2-editenv").args(["/boot/grub2/grubenv", "list"]).output() {
-        if output.status.success() {
-            let s = String::from_utf8_lossy(&output.stdout);
-            for line in s.lines() {
-                if line.starts_with("boot_counter=") {
-                    counter = line.split('=').nth(1).unwrap_or("0").parse().unwrap_or(0);
-                }
-                if line.starts_with("blaze_recovery=1") || line.starts_with("blaze_recovery=alert") {
-                    requested = true;
+    // 1. Check BlazeOS Native BERP counter & kernel cmdline (Limine 12.x)
+    if let Ok(c_str) = fs::read_to_string("/var/lib/blaze/berp-counter") {
+        counter = c_str.trim().parse().unwrap_or(0);
+    }
+    if let Ok(cmdline) = fs::read_to_string("/proc/cmdline") {
+        if cmdline.contains("berp.mode=recovery") || cmdline.contains("blaze_recovery=1") {
+            requested = true;
+        }
+    }
+
+    // 2. Legacy grubenv fallback if present
+    if Path::new("/boot/grub2/grubenv").exists() {
+        if let Ok(output) = Command::new("grub2-editenv").args(["/boot/grub2/grubenv", "list"]).output() {
+            if output.status.success() {
+                let s = String::from_utf8_lossy(&output.stdout);
+                for line in s.lines() {
+                    if line.starts_with("boot_counter=") {
+                        counter = line.split('=').nth(1).unwrap_or("0").parse().unwrap_or(counter);
+                    }
+                    if line.starts_with("blaze_recovery=1") || line.starts_with("blaze_recovery=alert") {
+                        requested = true;
+                    }
                 }
             }
         }
     }
 
-    if Path::new("/var/run/blaze_recovery_trigger").exists() || Path::new("/run/blaze_recovery_trigger").exists() {
+    if Path::new("/var/lib/blaze/berp-trigger").exists()
+        || Path::new("/var/run/blaze_recovery_trigger").exists()
+        || Path::new("/run/blaze_recovery_trigger").exists()
+    {
         requested = true;
     }
 
@@ -824,9 +839,9 @@ fn execute_preserved_reset(folders: &[PreservedFolder]) -> Result<()> {
 
                     execute!(
                         out,
-                        Print("  [4/4] SELinux ve kullanıcı sahiplik etiketleri onarılıyor...\r\n")
+                        Print("  [4/4] Portadora paket işlemleri ve kullanıcı sahiplik izinleri onarılıyor...\r\n")
                     )?;
-                    let _ = Command::new("restorecon").args(["-Rv", "/home"]).status();
+                    let _ = Command::new("portadora").arg("recover").status();
                     clear_boot_triggers();
 
                     execute!(
@@ -981,17 +996,29 @@ fn handle_diagnostics(app: &BerpApp) -> Result<()> {
     execute!(out, Print("\r\n"), ResetColor)?;
     out.flush()?;
 
-    // 3. Btrfs Scrub
+    // 3. Filesystem & Portadora Cryptographic Package Verification
     execute!(
         out,
         SetForegroundColor(Color::Green),
-        Print("  [3] Dosya Sistemi Bütünlük Denetimi (Scrub / Check):\r\n"),
+        Print("  [3] Dosya Sistemi & Portadora Paket Bütünlük Denetimi:\r\n"),
         SetForegroundColor(Color::White)
     )?;
     if app.root_btrfs {
         execute!(out, Print("      * Btrfs dosya sistemi algılandı: Hata taraması çalıştırıldı: 0 bozuk blok.\r\n"))?;
     } else {
-        execute!(out, Print("      * Standart ext4/xfs dosya sistemi: Bütünlük bayrağı temiz.\r\n"))?;
+        execute!(out, Print("      * BlazeOS Native ext4 + Limine 12.x önyükleme zinciri aktif.\r\n"))?;
+    }
+    if let Ok(p_out) = Command::new("portadora").arg("verify").output() {
+        let p_txt = String::from_utf8_lossy(&p_out.stdout);
+        for line in p_txt.lines().take(5) {
+            execute!(out, Print(format!("      * Portadora: {}\r\n", line)))?;
+        }
+    }
+    if let Ok(s_out) = Command::new("blaze-sentinel").arg("status").output() {
+        let s_txt = String::from_utf8_lossy(&s_out.stdout);
+        if let Some(score_line) = s_txt.lines().find(|l| l.contains("Score:")) {
+            execute!(out, Print(format!("      * Blaze Sentinel: {}\r\n", score_line.trim())))?;
+        }
     }
     execute!(out, Print("\r\n"), ResetColor)?;
 
@@ -1030,12 +1057,17 @@ fn handle_emergency_shell() -> Result<()> {
 }
 
 fn clear_boot_triggers() {
-    let _ = Command::new("grub2-editenv")
-        .args(["/boot/grub2/grubenv", "set", "boot_counter=0"])
-        .status();
-    let _ = Command::new("grub2-editenv")
-        .args(["/boot/grub2/grubenv", "unset", "blaze_recovery"])
-        .status();
+    let _ = fs::create_dir_all("/var/lib/blaze");
+    let _ = fs::write("/var/lib/blaze/berp-counter", "0\n");
+    let _ = fs::remove_file("/var/lib/blaze/berp-trigger");
+    if Path::new("/boot/grub2/grubenv").exists() {
+        let _ = Command::new("grub2-editenv")
+            .args(["/boot/grub2/grubenv", "set", "boot_counter=0"])
+            .status();
+        let _ = Command::new("grub2-editenv")
+            .args(["/boot/grub2/grubenv", "unset", "blaze_recovery"])
+            .status();
+    }
     let _ = fs::remove_file("/var/run/blaze_recovery_trigger");
     let _ = fs::remove_file("/run/blaze_recovery_trigger");
 }
@@ -1086,9 +1118,8 @@ fn main() -> Result<()> {
                 return Ok(());
             }
             "--trigger" => {
-                let _ = Command::new("grub2-editenv")
-                    .args(["/boot/grub2/grubenv", "set", "blaze_recovery=alert"])
-                    .status();
+                let _ = fs::create_dir_all("/var/lib/blaze");
+                let _ = fs::write("/var/lib/blaze/berp-trigger", "1\n");
                 let _ = fs::write("/var/run/blaze_recovery_trigger", "1");
                 println!("BERP: Acil kurtarma bir sonraki açılış için tetiklendi.");
                 return Ok(());
