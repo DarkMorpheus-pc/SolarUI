@@ -1698,7 +1698,7 @@ fn build_gamezone_ui(main_loop: glib::MainLoop) {
     hero_left.set_hexpand(true);
     hero_left.set_valign(gtk4::Align::End);
 
-    let hero_kicker = Label::new(Some("BLAZE UNIVERSE • LIVING FLOW CONSOLE"));
+    let hero_kicker = Label::new(Some("BLAZE UNIVERSE • GAMEZONE"));
     hero_kicker.add_css_class("xbox-hero-kicker");
     hero_kicker.set_halign(gtk4::Align::Start);
     hero_left.append(&hero_kicker);

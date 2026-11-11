@@ -116,14 +116,14 @@ fn build_welcome_ui(main_loop: glib::MainLoop) {
     let shell_box = GtkBox::new(Orientation::Vertical, 0);
     shell_box.add_css_class("lf-window-shell");
 
-    let fluid_cloud = FluidCloud::new("Living Flow • Sistem Hazır");
+    let fluid_cloud = FluidCloud::new("Sistem Hazır");
     let top_emblem = load_png_emblem(WELCOME_EMBLEM_PNG, 34);
     let loop_top = main_loop.clone();
     let topbar = build_living_flow_topbar(
         &window,
         Some(top_emblem),
         "SolarUI Masaüstü Rehberi",
-        "Blaze Universe • Living Flow Design",
+        "Blaze Universe",
         &fluid_cloud,
         Some(Box::new(move || loop_top.quit())),
     );

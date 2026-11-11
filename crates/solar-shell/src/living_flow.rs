@@ -100,7 +100,7 @@ impl FluidCloud {
                 let _ = Command::new("notify-send")
                     .args([
                         "-a",
-                        "SolarUI Living Flow",
+                        "SolarUI",
                         "-i",
                         "solar-settings",
                         "Blaze Universe",

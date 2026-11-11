@@ -274,7 +274,7 @@ pub fn launch_installer_window() {
         &window,
         Some(emblem),
         "Blaze Universe — Solar Kurulum Sihirbazı",
-        "Living Flow Design • Limine 12.x UEFI/BIOS • fs-verity & BERP",
+        "Limine 12.x UEFI/BIOS • fs-verity & BERP",
         &fluid_cloud,
         Some(Box::new(move || loop_top.quit())),
     );

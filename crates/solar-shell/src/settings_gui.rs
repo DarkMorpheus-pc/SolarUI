@@ -124,14 +124,14 @@ fn build_settings_ui(main_loop: glib::MainLoop) {
     let shell_box = GtkBox::new(Orientation::Vertical, 0);
     shell_box.add_css_class("lf-window-shell");
 
-    let fluid_cloud = FluidCloud::new("Living Flow • Ayarlar Senkronize");
+    let fluid_cloud = FluidCloud::new("Ayarlar Senkronize");
     let emblem = load_png_emblem(SETTINGS_EMBLEM_PNG, 34);
     let loop_top = main_loop.clone();
     let topbar = build_living_flow_topbar(
         &window,
         Some(emblem),
         "SolarUI Masaüstü Ayarları",
-        "Blaze Universe • ColorOS 17 Living Flow Kontrol Paneli",
+        "Blaze Universe • Kontrol Paneli",
         &fluid_cloud,
         Some(Box::new(move || loop_top.quit())),
     );
@@ -291,7 +291,7 @@ fn build_settings_ui(main_loop: glib::MainLoop) {
     a_name.set_halign(gtk4::Align::Center);
     a_sec.append(&a_name);
 
-    let a_sig = Label::new(Some("ColorOS 17 Living Flow Design • Luminous Rendering & Aurora Physics"));
+    let a_sig = Label::new(Some("Luminous Rendering & Aurora Physics"));
     a_sig.add_css_class("settings-subtitle");
     a_sig.set_halign(gtk4::Align::Center);
     a_sec.append(&a_sig);

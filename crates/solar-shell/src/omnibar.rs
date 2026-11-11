@@ -291,7 +291,7 @@ fn build_omnibar_ui(main_loop: glib::MainLoop) {
     hint_label.set_halign(gtk4::Align::Start);
     footer_box.append(&hint_label);
 
-    let fluid_cloud = FluidCloud::new("Living Flow Arama Hazır");
+    let fluid_cloud = FluidCloud::new("Arama Hazır");
     footer_box.append(fluid_cloud.widget());
     root_box.append(&footer_box);
 
@@ -773,7 +773,7 @@ fn generate_omnibar_items(raw_query: &str, apps: &[AppInfo]) -> Vec<OmnibarItem>
     let sys_commands = [
         ("store", "FireHub Uygulama Mağazası", "Portadora (.blz) ve Flathub uygulama mağazasını aç", "firehub", "firehub"),
         ("install", "BlazeOS Sistem Kurucusu (Solar Installer)", "BlazeOS'u sabit diske grafiksel sihirbaz ile kur", "solar-shell installer", "solar-installer"),
-        ("settings", "SolarUI Masaüstü Ayarları", "ColorOS 17 Living Flow kontrol paneli, kabuk motoru ve görev çubuğu", "solar-shell settings", "solar-settings"),
+        ("settings", "SolarUI Masaüstü Ayarları", "Kontrol paneli, kabuk motoru ve görev çubuğu", "solar-shell settings", "solar-settings"),
         ("welcome", "BlazeOS Karşılama & Rehber Merkezi", "Kısayol rehberi, kabuk seçici ve sistem araçları", "solar-shell welcome", "solar-welcome"),
         ("game", "Blaze GameZone Tam Ekran Oyun Kabuğu", "Steam Deck / Xbox UI Konsol Modunu ve Proton-GE Yöneticisini Başlat", "solar-shell gamezone", "solar-gamezone"),
         ("berp kurtarma", "Blaze Acil Kurtarma & Zaman Makinesi (BERP)", "Kurtarma, Portadora Doğrulama ve Donanım Denetim Konsolunu Başlat", "alacritty -e blaze-recovery", "blaze-recovery"),

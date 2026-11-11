@@ -362,3 +362,21 @@ binds {
     Ctrl+Alt+Delete { quit skip-confirmation=true; }
     Mod+L       { spawn "solar-lock"; }
 }
+
+// GameZone modal dialogs (external game scanner) must be compact centered floating windows
+window-rule {
+    match title=r#"^(Harici Oyun veya Klasör Tanıt|Add External Game or Folder)$"#
+    open-floating true
+    open-focused true
+    default-column-width { fixed 640; }
+    default-window-height { fixed 330; }
+    geometry-corner-radius 20
+    clip-to-geometry true
+}
+
+// Make every launched app (Electron/Chromium: FireHub, Firefox, ...) pick the Wayland backend
+environment {
+    XDG_SESSION_TYPE "wayland"
+    ELECTRON_OZONE_PLATFORM_HINT "wayland"
+    MOZ_ENABLE_WAYLAND "1"
+}
