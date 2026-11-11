@@ -735,28 +735,40 @@ fn resolve_desktop_icon_path(icon_name: &str) -> Option<String> {
     None
 }
 
+fn load_picture_file(pic: &Picture, path: &Path) {
+    if let Ok(bytes) = std::fs::read(path) {
+        let gbytes = glib::Bytes::from(&bytes);
+        if let Ok(texture) = gdk::Texture::from_bytes(&gbytes) {
+            pic.set_paintable(Some(&texture));
+            return;
+        }
+    }
+    pic.set_filename(Some(path));
+}
+
 fn create_nav_button(label_text: &str, icon_name_base: &str) -> Button {
     let btn = Button::new();
     btn.add_css_class("xbox-nav-icon-btn");
 
-    let b_box = GtkBox::new(Orientation::Horizontal, 6);
+    let b_box = GtkBox::new(Orientation::Horizontal, 7);
     b_box.set_valign(gtk4::Align::Center);
 
     let pic = Picture::new();
-    pic.set_size_request(18, 18);
+    pic.set_size_request(16, 16);
     pic.set_can_shrink(true);
-    pic.set_content_fit(gtk4::ContentFit::Cover);
+    pic.set_content_fit(gtk4::ContentFit::Contain);
     pic.add_css_class("xbox-nav-btn-icon");
 
     let icon_candidates = [
-        format!("/home/darkmorpheus/BlazeFedora/blazeos_custom_apps/usr/share/solarui/icons/{}.svg", icon_name_base),
-        format!("/home/darkmorpheus/BlazeFedora/blazeos_custom_apps/usr/share/solarui/icons/{}.png", icon_name_base),
-        format!("/usr/share/solarui/icons/{}.svg", icon_name_base),
         format!("/usr/share/solarui/icons/{}.png", icon_name_base),
+        format!("/home/darkmorpheus/SolarUI/data/icons/gamezone/{}.png", icon_name_base),
+        format!("/usr/share/solarui/icons/{}.svg", icon_name_base),
+        format!("/home/darkmorpheus/BlazeFedora/blazeos_custom_apps/usr/share/solarui/icons/{}.png", icon_name_base),
+        format!("/home/darkmorpheus/BlazeFedora/blazeos_custom_apps/usr/share/solarui/icons/{}.svg", icon_name_base),
     ];
     for ic in &icon_candidates {
         if Path::new(ic).exists() {
-            pic.set_filename(Some(Path::new(ic)));
+            load_picture_file(&pic, Path::new(ic));
             b_box.append(&pic);
             break;
         }
@@ -775,9 +787,22 @@ fn build_gamezone_ui(main_loop: glib::MainLoop) {
     let provider = CssProvider::new();
     let css = r#"
         window {
-            background-color: #0b0e14;
-            color: #ffffff;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Segoe UI Variable", sans-serif;
+            background-color: #111216;
+            color: #f4f4f6;
+            font-family: "Inter", "Cantarell", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        }
+
+        button {
+            background-image: none;
+        }
+
+        *,
+        *:focus,
+        *:focus-visible,
+        *:focus-within {
+            outline-color: transparent;
+            outline-width: 0px;
+            outline-style: none;
         }
 
         .xbox-root {
@@ -786,200 +811,174 @@ fn build_gamezone_ui(main_loop: glib::MainLoop) {
             margin: 0;
         }
 
-        /* ── Fullscreen Backdrop & Scrim ── */
+        /* ── Fullscreen Backdrop & Obsidian Scrim ── */
         .xbox-backdrop-layer {
-            background-color: #05070a;
+            background-color: #111216;
         }
 
         .xbox-backdrop-scrim {
             background: linear-gradient(180deg,
-                rgba(5, 7, 10, 0.25) 0%,
-                rgba(5, 7, 10, 0.45) 45%,
-                rgba(5, 7, 10, 0.88) 75%,
-                rgba(5, 7, 10, 0.98) 100%
+                rgba(14, 15, 19, 0.14) 0%,
+                rgba(14, 15, 19, 0.34) 42%,
+                rgba(14, 15, 19, 0.84) 74%,
+                rgba(14, 15, 19, 0.97) 100%
             );
         }
 
-        /* ── Top Fluent HUD Bar ── */
+        /* ── Top Living Flow HUD Bar ── */
         .xbox-top-bar {
-            padding: 24px 44px 12px 44px;
+            padding: 20px 28px 12px 28px;
             background: transparent;
         }
 
         .xbox-avatar {
+            min-width: 34px;
+            min-height: 34px;
             border-radius: 9999px;
-            border: 2px solid rgba(255, 255, 255, 0.25);
+            border: 1.5px solid rgba(255, 255, 255, 0.22);
+            background-color: #1a1c22;
             margin-right: 12px;
         }
 
         .xbox-gamertag {
-            color: #ffffff;
+            color: #f4f4f6;
             font-size: 15px;
             font-weight: 700;
             letter-spacing: -0.2px;
         }
 
         .xbox-badge-tag {
-            background: #ffffff;
-            color: #000000;
+            background: rgba(244, 244, 246, 0.94);
+            color: #111215;
             font-size: 9px;
             font-weight: 900;
-            padding: 2px 6px;
-            border-radius: 4px;
+            padding: 2px 7px;
+            border-radius: 999px;
             margin-left: 8px;
-            letter-spacing: 0.5px;
+            letter-spacing: 0.6px;
             min-height: 14px;
         }
 
         .xbox-gamerscore {
-            color: #a0a6b2;
+            color: #a1a1aa;
             font-size: 13px;
             font-weight: 600;
-            margin-left: 10px;
+            margin-left: 8px;
         }
 
         .xbox-score-icon {
-            color: #107c10;
+            color: #e54d2e;
             font-size: 13px;
             font-weight: 800;
             margin-right: 3px;
         }
 
-
         .xbox-top-nav-group {
-            background: rgba(18, 22, 28, 0.75);
-            border: 1px solid rgba(255, 255, 255, 0.12);
-            border-radius: 26px;
+            background: rgba(22, 23, 28, 0.86);
+            border: 1px solid rgba(255, 255, 255, 0.10);
+            border-radius: 999px;
             padding: 4px 6px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.42);
         }
 
         .xbox-nav-icon-btn {
             background: transparent;
-            color: #d0d6e0;
-            border-radius: 20px;
-            padding: 6px 14px;
-            border: 2px solid transparent;
-            font-size: 13px;
+            color: #c8cbd2;
+            border-radius: 999px;
+            padding: 6px 12px;
+            border: 1px solid transparent;
+            font-size: 12.5px;
             font-weight: 700;
-            transition: all 150ms cubic-bezier(0.16, 1, 0.3, 1);
+            transition: all 180ms cubic-bezier(0.22, 1, 0.36, 1);
         }
 
         .xbox-nav-icon-btn:hover {
             color: #ffffff;
-            background: rgba(255, 255, 255, 0.14);
+            background: rgba(255, 255, 255, 0.08);
         }
 
-        .xbox-nav-icon-btn:focus, .xbox-nav-icon-btn.active {
+        .xbox-nav-icon-btn:focus {
             color: #ffffff;
-            background: rgba(255, 255, 255, 0.22);
-            border: 2px solid #52b7ff;
-            box-shadow: 0 0 14px rgba(82, 183, 255, 0.45);
-            transform: scale(1.04);
+            background: rgba(255, 255, 255, 0.16);
+            border: 1px solid rgba(255, 255, 255, 0.34);
+            box-shadow: 0 4px 14px rgba(0, 0, 0, 0.36);
+        }
+
+        .xbox-nav-icon-btn.active {
+            color: #ffffff;
+            background: rgba(255, 255, 255, 0.13);
+            border: 1px solid rgba(255, 255, 255, 0.22);
         }
 
         .xbox-nav-btn-icon {
-            margin-right: 6px;
+            margin-right: 4px;
+            min-width: 16px;
+            min-height: 16px;
         }
 
         /* ── Search & Filter Omnibar In Drawer ── */
         .xbox-search-bar {
-            background: #141a24;
-            color: #ffffff;
-            border: 1px solid #2a3546;
-            border-radius: 8px;
-            padding: 8px 14px;
+            background: #1c1e24;
+            color: #f4f4f6;
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 999px;
+            padding: 9px 18px;
             font-size: 14px;
             margin-bottom: 16px;
         }
 
         .xbox-search-bar:focus {
-            border: 2px solid #52b7ff;
-            box-shadow: 0 0 16px rgba(82, 183, 255, 0.4);
+            border: 1px solid rgba(255, 255, 255, 0.32);
+            box-shadow: none;
         }
 
         /* ── Settings & Store Panels ── */
         .xbox-modal-drawer {
-            background: rgba(14, 18, 25, 0.96);
-            border-radius: 16px;
-            border: 1px solid rgba(255, 255, 255, 0.15);
+            background: rgba(20, 21, 26, 0.96);
+            border-radius: 22px;
+            border: 1px solid rgba(255, 255, 255, 0.11);
             padding: 24px 32px;
             margin-top: 8px;
             margin-bottom: 24px;
-            box-shadow: 0 16px 40px rgba(0, 0, 0, 0.7);
+            box-shadow: 0 18px 44px rgba(0, 0, 0, 0.72);
         }
 
         .xbox-modal-card {
-            background: #1c2432;
-            border-radius: 12px;
-            border: 2px solid transparent;
+            background: #22242c;
+            border-radius: 16px;
+            border: 1px solid rgba(255, 255, 255, 0.09);
             padding: 16px 20px;
             margin-right: 14px;
             min-width: 220px;
-            transition: all 120ms ease;
+            transition: all 160ms cubic-bezier(0.22, 1, 0.36, 1);
         }
 
         .xbox-modal-card:hover, .xbox-modal-card:focus {
-            border: 2px solid #52b7ff;
-            background: #243042;
-            transform: scale(1.03);
+            border: 1px solid rgba(255, 255, 255, 0.36);
+            background: #2a2d37;
+            transform: scale(1.02);
         }
 
         .xbox-modal-card-title {
-            color: #ffffff;
+            color: #f4f4f6;
             font-size: 15px;
             font-weight: 700;
         }
 
         .xbox-modal-card-desc {
-            color: #a0a6b2;
+            color: #9ca3af;
             font-size: 12px;
             margin-top: 4px;
         }
 
-        .xbox-top-nav-group {
-            background: rgba(18, 22, 28, 0.65);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            border-radius: 24px;
-            padding: 4px 6px;
-        }
-
-        .xbox-nav-icon-btn {
-            background: transparent;
-            color: #c0c6d0;
-            border-radius: 18px;
-            padding: 7px 14px;
-            border: 2px solid transparent;
-            font-size: 12px;
-            font-weight: 700;
-            transition: all 120ms cubic-bezier(0.16, 1, 0.3, 1);
-        }
-
-        .xbox-nav-icon-btn:hover {
-            color: #ffffff;
-            background: rgba(255, 255, 255, 0.12);
-        }
-
-        .xbox-nav-icon-btn:focus {
-            color: #ffffff;
-            background: rgba(255, 255, 255, 0.20);
-            border: 2px solid #52b7ff;
-            box-shadow: 0 0 12px rgba(82, 183, 255, 0.4);
-            transform: scale(1.05);
-        }
-
-        .xbox-nav-icon-btn.active {
-            color: #ffffff;
-            background: rgba(255, 255, 255, 0.18);
-        }
-
         .xbox-hud-right {
-            color: #ffffff;
+            color: #d4d4d8;
             font-size: 13px;
             font-weight: 600;
         }
 
         .xbox-hud-time {
-            color: #ffffff;
+            color: #f4f4f6;
             font-size: 14px;
             font-weight: 700;
             margin-left: 12px;
@@ -987,19 +986,19 @@ fn build_gamezone_ui(main_loop: glib::MainLoop) {
 
         .xbox-lang-btn {
             background: rgba(255, 255, 255, 0.08);
-            color: #c0c6d0;
+            color: #e4e4e7;
             font-size: 11px;
             font-weight: 700;
-            border-radius: 12px;
-            padding: 3px 10px;
-            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 999px;
+            padding: 4px 11px;
+            border: 1px solid rgba(255, 255, 255, 0.14);
             margin-left: 14px;
-            transition: all 120ms ease;
+            transition: all 150ms ease;
         }
 
         .xbox-lang-btn:hover, .xbox-lang-btn:focus {
-            background: #ffffff;
-            color: #000000;
+            background: #f2f3f5;
+            color: #111215;
             border-color: #ffffff;
         }
 
@@ -1011,36 +1010,65 @@ fn build_gamezone_ui(main_loop: glib::MainLoop) {
         }
 
         .xbox-content-box {
-            padding: 0 44px 32px 44px;
+            padding: 0 44px 28px 44px;
             background: transparent;
         }
 
         .xbox-hero-spacer {
-            min-height: 220px;
+            min-height: 196px;
+            padding-top: 26px;
+            padding-bottom: 18px;
+        }
+
+        .xbox-hero-kicker {
+            color: #e56b4e;
+            font-size: 11px;
+            font-weight: 800;
+            letter-spacing: 1.4px;
+        }
+
+        .xbox-hero-headline {
+            color: #f4f4f6;
+            font-size: 28px;
+            font-weight: 800;
+            letter-spacing: -0.5px;
+            margin-top: 4px;
+        }
+
+        .xbox-hero-desc {
+            color: #a1a1aa;
+            font-size: 13.5px;
+            font-weight: 500;
+            margin-top: 4px;
         }
 
         /* ── Focused Title Label ── */
         .xbox-active-title-label {
-            color: #ffffff;
-            font-size: 26px;
+            color: #f4f4f6;
+            font-size: 24px;
             font-weight: 800;
-            letter-spacing: -0.5px;
-            margin-bottom: 14px;
-            text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8);
+            letter-spacing: -0.4px;
+            margin-bottom: 12px;
+            text-shadow: 0 2px 10px rgba(0, 0, 0, 0.75);
         }
 
         .xbox-active-badge {
-            color: #52b7ff;
-            font-size: 12px;
-            font-weight: 700;
-            margin-left: 12px;
-            letter-spacing: 0.5px;
+            background: rgba(207, 63, 36, 0.20);
+            color: #f5b4a5;
+            border: 1px solid rgba(229, 77, 46, 0.36);
+            border-radius: 999px;
+            padding: 3px 11px;
+            font-size: 10.5px;
+            font-weight: 800;
+            margin-left: 10px;
+            margin-bottom: 14px;
+            letter-spacing: 0.6px;
         }
 
         /* ── Game Carousel Row ── */
         .xbox-carousel-scroll {
             background: transparent;
-            margin-bottom: 24px;
+            margin-bottom: 22px;
         }
 
         .xbox-carousel-scroll undershoot.top,
@@ -1057,94 +1085,89 @@ fn build_gamezone_ui(main_loop: glib::MainLoop) {
         }
 
         .xbox-game-card {
-            background: linear-gradient(155deg, rgba(20, 29, 46, 0.92), rgba(12, 18, 30, 0.96));
+            background: linear-gradient(180deg, rgba(28, 30, 36, 0.96), rgba(18, 19, 24, 0.98));
             background-image: none;
             border-radius: 20px;
-            border: 1.5px solid rgba(255, 255, 255, 0.14);
+            border: 1px solid rgba(255, 255, 255, 0.12);
             padding: 0;
             margin-right: 14px;
             margin-top: 8px;
             margin-bottom: 8px;
             min-width: 156px;
             min-height: 156px;
-            transition: all 220ms cubic-bezier(0.22, 1, 0.36, 1);
-            box-shadow: 0 8px 22px rgba(2, 6, 23, 0.52);
+            transition: all 200ms cubic-bezier(0.22, 1, 0.36, 1);
+            box-shadow: 0 10px 24px rgba(0, 0, 0, 0.52);
         }
 
         .xbox-game-card:hover {
-            border-color: rgba(125, 211, 252, 0.72);
-            transform: scale(1.04);
+            border-color: rgba(255, 255, 255, 0.42);
+            transform: scale(1.03);
         }
 
         .xbox-game-card:focus, .xbox-game-card.active-focus {
-            border: 2.5px solid #38bdf8;
-            box-shadow: 0 0 26px rgba(56, 189, 248, 0.65), 0 12px 30px rgba(0, 0, 0, 0.8);
-            transform: scale(1.07);
+            border: 1.5px solid rgba(255, 255, 255, 0.80);
+            box-shadow: 0 14px 32px rgba(0, 0, 0, 0.72);
+            transform: scale(1.05);
         }
 
         .xbox-game-card-img {
-            border-radius: 18px;
+            border-radius: 19px;
             min-width: 156px;
             min-height: 156px;
         }
 
         .xbox-card-caption {
-            background: linear-gradient(180deg, rgba(9, 13, 22, 0.0) 0%, rgba(9, 13, 22, 0.88) 45%, rgba(9, 13, 22, 0.96) 100%);
-            border-bottom-left-radius: 18px;
-            border-bottom-right-radius: 18px;
-            padding: 18px 10px 8px 10px;
+            background: linear-gradient(180deg, rgba(14, 15, 19, 0.0) 0%, rgba(14, 15, 19, 0.84) 48%, rgba(14, 15, 19, 0.96) 100%);
+            border-bottom-left-radius: 19px;
+            border-bottom-right-radius: 19px;
+            padding: 18px 11px 9px 11px;
         }
 
         .xbox-card-caption-title {
-            color: #f8fafc;
+            color: #f4f4f6;
             font-size: 12px;
-            font-weight: 800;
+            font-weight: 700;
         }
 
         /* ── Bento Grid Bottom Banners ── */
         .xbox-bento-row {
-            margin-bottom: 24px;
+            margin-bottom: 20px;
         }
 
         .xbox-bento-card {
-            background: #141a24;
-            border-radius: 12px;
-            border: 2px solid transparent;
+            background: #181a20;
+            border-radius: 18px;
+            border: 1px solid rgba(255, 255, 255, 0.10);
             padding: 0;
             margin-right: 14px;
             min-width: 275px;
             min-height: 155px;
-                        transition: all 120ms cubic-bezier(0.16, 1, 0.3, 1);
-            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.45);
+            transition: all 180ms cubic-bezier(0.22, 1, 0.36, 1);
+            box-shadow: 0 10px 24px rgba(0, 0, 0, 0.48);
         }
 
-        .xbox-bento-card:hover {
-            border: 2px solid rgba(255, 255, 255, 0.5);
-            transform: scale(1.03);
-        }
-
-        .xbox-bento-card:focus {
-            border: 3px solid #107c10; /* Xbox green glow for bento */
-            box-shadow: 0 0 24px rgba(16, 124, 16, 0.65), 0 8px 24px rgba(0, 0, 0, 0.7);
-            transform: scale(1.06);
+        .xbox-bento-card:hover, .xbox-bento-card:focus {
+            border: 1.5px solid rgba(255, 255, 255, 0.48);
+            box-shadow: 0 14px 30px rgba(0, 0, 0, 0.68);
+            transform: scale(1.025);
         }
 
         .xbox-bento-overlay-box {
-            background: linear-gradient(180deg, rgba(0, 0, 0, 0.1) 0%, rgba(0, 0, 0, 0.78) 100%);
-            border-radius: 10px;
+            background: linear-gradient(180deg, rgba(12, 13, 16, 0.05) 0%, rgba(12, 13, 16, 0.82) 100%);
+            border-radius: 17px;
             padding: 14px 16px;
         }
 
         .xbox-bento-tag {
-            color: #52b7ff;
+            color: #e56b4e;
             font-size: 10px;
             font-weight: 800;
             text-transform: uppercase;
-            letter-spacing: 0.8px;
+            letter-spacing: 0.9px;
         }
 
         .xbox-bento-title {
-            color: #ffffff;
+            color: #f4f4f6;
             font-size: 15px;
             font-weight: 700;
             margin-top: 2px;
@@ -1152,7 +1175,7 @@ fn build_gamezone_ui(main_loop: glib::MainLoop) {
         }
 
         .xbox-bento-subtitle {
-            color: #b0b6c2;
+            color: #a1a1aa;
             font-size: 12px;
             font-weight: 500;
             margin-top: 2px;
@@ -1160,55 +1183,55 @@ fn build_gamezone_ui(main_loop: glib::MainLoop) {
 
         /* ── All Apps View Grid ── */
         .xbox-apps-drawer {
-            background: rgba(11, 14, 20, 0.94);
-            border-radius: 16px;
-            border: 1px solid rgba(255, 255, 255, 0.12);
+            background: rgba(20, 21, 26, 0.96);
+            border-radius: 22px;
+            border: 1px solid rgba(255, 255, 255, 0.11);
             padding: 24px 32px;
             margin-top: 8px;
             margin-bottom: 24px;
         }
 
         .xbox-apps-header {
-            color: #ffffff;
+            color: #f4f4f6;
             font-size: 20px;
             font-weight: 800;
             margin-bottom: 16px;
         }
 
         .xbox-apps-close-btn {
-            background: rgba(255, 255, 255, 0.1);
-            color: #ffffff;
+            background: rgba(255, 255, 255, 0.08);
+            color: #f4f4f6;
             font-size: 12px;
             font-weight: 700;
-            border-radius: 8px;
+            border-radius: 999px;
             padding: 6px 14px;
-            border: 1px solid rgba(255, 255, 255, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.16);
         }
 
         .xbox-apps-close-btn:hover, .xbox-apps-close-btn:focus {
-            background: #ef4444;
-            border-color: #ffffff;
+            background: #c83b22;
+            border-color: rgba(255, 255, 255, 0.32);
         }
 
         .xbox-app-tile {
-            background: #18202c;
-            border-radius: 10px;
-            border: 2px solid transparent;
+            background: #20222a;
+            border-radius: 14px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
             padding: 12px;
             margin-right: 12px;
             margin-bottom: 12px;
             min-width: 150px;
-                        transition: all 120ms ease;
+            transition: all 150ms ease;
         }
 
         .xbox-app-tile:hover, .xbox-app-tile:focus {
-            border: 2px solid #52b7ff;
-            background: #202b3a;
-            transform: scale(1.04);
+            border: 1px solid rgba(255, 255, 255, 0.36);
+            background: #282b35;
+            transform: scale(1.03);
         }
 
         .xbox-app-title {
-            color: #ffffff;
+            color: #f4f4f6;
             font-size: 12px;
             font-weight: 700;
             margin-top: 6px;
@@ -1216,15 +1239,15 @@ fn build_gamezone_ui(main_loop: glib::MainLoop) {
 
         /* ── Bottom Gamepad Bar (Legend) ── */
         .xbox-controller-bar {
-            background: rgba(11, 14, 20, 0.85);
+            background: rgba(15, 16, 20, 0.90);
             border-top: 1px solid rgba(255, 255, 255, 0.08);
             padding: 10px 44px;
         }
 
         .xbox-legend-key {
-            background: rgba(255, 255, 255, 0.12);
-            color: #ffffff;
-            border: 1px solid rgba(255, 255, 255, 0.22);
+            background: rgba(255, 255, 255, 0.10);
+            color: #f4f4f6;
+            border: 1px solid rgba(255, 255, 255, 0.18);
             border-radius: 9999px;
             font-size: 11px;
             font-weight: 800;
@@ -1235,7 +1258,7 @@ fn build_gamezone_ui(main_loop: glib::MainLoop) {
         }
 
         .xbox-legend-desc {
-            color: #a0a6b2;
+            color: #a1a1aa;
             font-size: 12px;
             font-weight: 600;
             margin-right: 28px;
@@ -1243,9 +1266,9 @@ fn build_gamezone_ui(main_loop: glib::MainLoop) {
 
         /* ── Offline Banner ── */
         .xbox-offline-banner {
-            background: rgba(220, 38, 38, 0.25);
-            border: 1px solid #ef4444;
-            border-radius: 10px;
+            background: rgba(44, 24, 22, 0.90);
+            border: 1px solid rgba(229, 77, 46, 0.38);
+            border-radius: 14px;
             padding: 8px 16px;
             margin: 0 44px 12px 44px;
         }
@@ -1289,7 +1312,7 @@ fn build_gamezone_ui(main_loop: glib::MainLoop) {
 
     let def_wallpaper = get_default_wallpaper_path();
     if !def_wallpaper.is_empty() {
-        bg_picture.set_filename(Some(Path::new(&def_wallpaper)));
+        load_picture_file(&bg_picture, Path::new(&def_wallpaper));
     }
 
     let bg_scrim = GtkBox::new(Orientation::Vertical, 0);
@@ -1366,13 +1389,14 @@ fn build_gamezone_ui(main_loop: glib::MainLoop) {
     avatar_pic.add_css_class("xbox-avatar");
 
     let avatar_candidates = [
-        "/home/darkmorpheus/BlazeFedora/blazeos_custom_apps/usr/share/solarui/covers/user_avatar.png",
         "/usr/share/solarui/covers/user_avatar.png",
+        "/home/darkmorpheus/SolarUI/data/covers/user_avatar.png",
+        "/home/darkmorpheus/BlazeFedora/blazeos_custom_apps/usr/share/solarui/covers/user_avatar.png",
         "/usr/share/pixmaps/faces/user.png",
     ];
     for ac in avatar_candidates {
         if Path::new(ac).exists() {
-            avatar_pic.set_filename(Some(Path::new(ac)));
+            load_picture_file(&avatar_pic, Path::new(ac));
             break;
         }
     }
@@ -1510,9 +1534,24 @@ fn build_gamezone_ui(main_loop: glib::MainLoop) {
     content_box.add_css_class("xbox-content-box");
     content_box.set_hexpand(true);
 
-    // Upper Hero Spacer (Shows the clean wallpaper art in upper 55-60% of viewport)
-    let hero_spacer = GtkBox::new(Orientation::Vertical, 0);
+    // Upper Hero Showcase Area (Displays ambient Blaze Obsidian hero canvas + editorial console header)
+    let hero_spacer = GtkBox::new(Orientation::Vertical, 2);
     hero_spacer.add_css_class("xbox-hero-spacer");
+    hero_spacer.set_valign(gtk4::Align::End);
+
+    let hero_kicker = Label::new(Some("BLAZE UNIVERSE • LIVING FLOW CONSOLE"));
+    hero_kicker.add_css_class("xbox-hero-kicker");
+    hero_kicker.set_halign(gtk4::Align::Start);
+    hero_spacer.append(&hero_kicker);
+
+    let hero_desc = Label::new(Some(match lang {
+        Language::TR => "Linux 7.2.9 sched_ext • NTSYNC Çekirdek Senkronizasyonu • Blaze Proton-GE Hazır",
+        Language::EN => "Linux 7.2.9 sched_ext • NTSYNC Kernel Sync • Blaze Proton-GE Ready",
+    }));
+    hero_desc.add_css_class("xbox-hero-desc");
+    hero_desc.set_halign(gtk4::Align::Start);
+    hero_spacer.append(&hero_desc);
+
     content_box.append(&hero_spacer);
 
     // Active Focused Game Title Label
@@ -2017,9 +2056,15 @@ fn build_gamezone_ui(main_loop: glib::MainLoop) {
     let b1_pic = Picture::new();
     b1_pic.set_can_shrink(true);
     b1_pic.set_content_fit(gtk4::ContentFit::Cover);
-    let b1_path = "/home/darkmorpheus/BlazeFedora/blazeos_custom_apps/usr/share/solarui/covers/bento_browse.png";
-    if Path::new(b1_path).exists() {
-        b1_pic.set_filename(Some(Path::new(b1_path)));
+    for b1_path in [
+        "/usr/share/solarui/covers/bento_browse.png",
+        "/home/darkmorpheus/SolarUI/data/covers/bento_browse.png",
+        "/home/darkmorpheus/BlazeFedora/blazeos_custom_apps/usr/share/solarui/covers/bento_browse.png",
+    ] {
+        if Path::new(b1_path).exists() {
+            load_picture_file(&b1_pic, Path::new(b1_path));
+            break;
+        }
     }
     bento1_overlay.set_child(Some(&b1_pic));
 
@@ -2057,9 +2102,15 @@ fn build_gamezone_ui(main_loop: glib::MainLoop) {
     let b2_pic = Picture::new();
     b2_pic.set_can_shrink(true);
     b2_pic.set_content_fit(gtk4::ContentFit::Cover);
-    let b2_path = "/home/darkmorpheus/BlazeFedora/blazeos_custom_apps/usr/share/solarui/covers/bento_performance.png";
-    if Path::new(b2_path).exists() {
-        b2_pic.set_filename(Some(Path::new(b2_path)));
+    for b2_path in [
+        "/usr/share/solarui/covers/bento_performance.png",
+        "/home/darkmorpheus/SolarUI/data/covers/bento_performance.png",
+        "/home/darkmorpheus/BlazeFedora/blazeos_custom_apps/usr/share/solarui/covers/bento_performance.png",
+    ] {
+        if Path::new(b2_path).exists() {
+            load_picture_file(&b2_pic, Path::new(b2_path));
+            break;
+        }
     }
     bento2_overlay.set_child(Some(&b2_pic));
 
@@ -2107,9 +2158,15 @@ fn build_gamezone_ui(main_loop: glib::MainLoop) {
     let b3_pic = Picture::new();
     b3_pic.set_can_shrink(true);
     b3_pic.set_content_fit(gtk4::ContentFit::Cover);
-    let b3_path = "/home/darkmorpheus/BlazeFedora/blazeos_custom_apps/usr/share/solarui/covers/bento_store.png";
-    if Path::new(b3_path).exists() {
-        b3_pic.set_filename(Some(Path::new(b3_path)));
+    for b3_path in [
+        "/usr/share/solarui/covers/bento_store.png",
+        "/home/darkmorpheus/SolarUI/data/covers/bento_store.png",
+        "/home/darkmorpheus/BlazeFedora/blazeos_custom_apps/usr/share/solarui/covers/bento_store.png",
+    ] {
+        if Path::new(b3_path).exists() {
+            load_picture_file(&b3_pic, Path::new(b3_path));
+            break;
+        }
     }
     bento3_overlay.set_child(Some(&b3_pic));
 
@@ -2154,9 +2211,15 @@ fn build_gamezone_ui(main_loop: glib::MainLoop) {
     let b4_pic = Picture::new();
     b4_pic.set_can_shrink(true);
     b4_pic.set_content_fit(gtk4::ContentFit::Cover);
-    let b4_path = "/home/darkmorpheus/BlazeFedora/blazeos_custom_apps/usr/share/solarui/covers/bento_settings.png";
-    if Path::new(b4_path).exists() {
-        b4_pic.set_filename(Some(Path::new(b4_path)));
+    for b4_path in [
+        "/usr/share/solarui/covers/bento_settings.png",
+        "/home/darkmorpheus/SolarUI/data/covers/bento_settings.png",
+        "/home/darkmorpheus/BlazeFedora/blazeos_custom_apps/usr/share/solarui/covers/bento_settings.png",
+    ] {
+        if Path::new(b4_path).exists() {
+            load_picture_file(&b4_pic, Path::new(b4_path));
+            break;
+        }
     }
     bento4_overlay.set_child(Some(&b4_pic));
 
@@ -2484,12 +2547,12 @@ fn update_hero_showcase(
 fn get_default_wallpaper_path() -> String {
     let candidates = [
         "/usr/share/blazeos/wallpapers/xbox_dynamic.png",
+        "/usr/share/solarui/covers/xbox_dynamic.png",
+        "/home/darkmorpheus/SolarUI/data/covers/xbox_dynamic.png",
         "/home/darkmorpheus/BlazeFedora/blazeos_custom_apps/usr/share/blazeos/wallpapers/xbox_dynamic.png",
         "/usr/share/blazeos/wallpapers/galaxy.png",
         "/usr/share/blazeos/wallpapers/default.png",
         "/usr/share/blazeos/wallpapers/blazeos-wallpaper-1.png",
-        "/home/darkmorpheus/BlazeFedora/blazeos_custom_apps/usr/share/blazeos/wallpapers/galaxy.png",
-        "/home/darkmorpheus/BlazeFedora/blazeos_custom_apps/usr/share/blazeos/wallpapers/default.png",
     ];
     for c in candidates {
         if Path::new(c).exists() {
@@ -2502,17 +2565,13 @@ fn get_default_wallpaper_path() -> String {
 fn update_backdrop(game: Option<&GameEntry>, bg_picture: &Picture) {
     if let Some(g) = game {
         if let Some(ss) = get_game_screenshot_path(g) {
-            bg_picture.set_filename(Some(Path::new(&ss)));
-            return;
-        }
-        if let Some(cover) = get_game_cover_path(g) {
-            bg_picture.set_filename(Some(Path::new(&cover)));
+            load_picture_file(bg_picture, Path::new(&ss));
             return;
         }
     }
     let def_wall = get_default_wallpaper_path();
     if !def_wall.is_empty() {
-        bg_picture.set_filename(Some(Path::new(&def_wall)));
+        load_picture_file(bg_picture, Path::new(&def_wall));
     } else {
         bg_picture.set_filename(None::<&Path>);
     }
@@ -2686,11 +2745,12 @@ fn get_game_screenshot_path(game: &GameEntry) -> Option<String> {
     }
     let bundled_dirs = [
         "/usr/share/solarui/covers",
+        "/home/darkmorpheus/SolarUI/data/covers",
         "/home/darkmorpheus/BlazeFedora/blazeos_custom_apps/usr/share/solarui/covers",
     ];
     for d in bundled_dirs {
         for key in &check_keys {
-            for prefix in [&format!("{}-screenshot", key), key] {
+            for prefix in [&format!("{}-screenshot", key), &format!("{}-hero", key)] {
                 for ext in ["jpg", "png", "svg"] {
                     let p = Path::new(d).join(format!("{}.{}", prefix, ext));
                     if p.exists() {
@@ -2784,15 +2844,16 @@ fn create_game_cover_image(game: &GameEntry) -> Picture {
     pic.add_css_class("game-cover-pic");
 
     if let Some(p) = get_game_cover_path(game) {
-        pic.set_filename(Some(Path::new(&p)));
+        load_picture_file(&pic, Path::new(&p));
     } else {
         let bundled = [
             "/usr/share/solarui/covers/steam-deck.jpg",
+            "/home/darkmorpheus/SolarUI/data/covers/steam-deck.jpg",
             "/home/darkmorpheus/BlazeFedora/blazeos_custom_apps/usr/share/solarui/covers/steam-deck.jpg",
         ];
         for b in bundled {
             if Path::new(b).exists() {
-                pic.set_filename(Some(Path::new(b)));
+                load_picture_file(&pic, Path::new(b));
                 break;
             }
         }
@@ -2969,6 +3030,25 @@ pub fn discover_store_showcase() -> Vec<GameEntry> {
 pub fn discover_store_showcase_for_lang(lang: Language) -> Vec<GameEntry> {
     let mut list = Vec::new();
 
+    let (deck_cat, deck_desc) = match lang {
+        Language::TR => ("Konsol Arayüzü", "Tam ekran Steam Big Picture ve kumanda destekli oyun merkezi."),
+        Language::EN => ("Console Interface", "Fullscreen Steam Big Picture and controller-native gaming hub."),
+    };
+    list.push(new_game_entry(
+        "steam-deck",
+        "Steam Big Picture",
+        deck_cat,
+        "steam -gamepadui",
+        deck_desc,
+        false,
+        None,
+        Some("/usr/share/solarui/covers/steam-deck.jpg".to_string()),
+        None,
+        None,
+        Some("https://store.steampowered.com/".to_string()),
+        None,
+    ));
+
     let (beam_cat, beam_desc) = match lang {
         Language::TR => ("Araç Fiziği Simülasyonu", "Gerçek zamanlı yumuşak gövde araç fiziği simülasyonu."),
         Language::EN => ("Vehicle Physics Simulation", "Real-time soft-body vehicle physics simulation."),
@@ -3076,7 +3156,7 @@ pub fn discover_store_showcase_for_lang(lang: Language) -> Vec<GameEntry> {
         xb_desc,
         false,
         None,
-        None,
+        Some("/usr/share/solarui/covers/xbox-cloud.jpg".to_string()),
         None,
         None,
         Some("https://www.xbox.com/play".to_string()),
@@ -3287,7 +3367,12 @@ pub fn discover_all_games() -> Vec<GameEntry> {
                                     exec = line[5..].trim().to_string();
                                 }
                             }
-                            if !name.is_empty() && !exec.is_empty() && !list.iter().any(|g| g.title == name) {
+                            if !name.is_empty()
+                                && !exec.is_empty()
+                                && !exec.contains("solar-gamezone")
+                                && !name.to_lowercase().contains("gamezone")
+                                && !list.iter().any(|g| g.title == name)
+                            {
                                 list.push(GameEntry {
                                     id: name.to_lowercase().replace(' ', "-"),
                                     title: name.clone(),

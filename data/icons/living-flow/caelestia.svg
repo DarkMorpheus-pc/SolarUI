@@ -1,28 +1,28 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
   <defs>
     <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#0369a1"/>
-      <stop offset="100%" stop-color="#312e81"/>
+      <stop offset="0%" stop-color="#293242"/>
+      <stop offset="100%" stop-color="#161b24"/>
     </linearGradient>
-    <radialGradient id="luminousGlow" cx="26%" cy="20%" r="74%">
-      <stop offset="0%" stop-color="#7dd3fc" stop-opacity="0.46"/>
-      <stop offset="100%" stop-color="#7dd3fc" stop-opacity="0.0"/>
+    <radialGradient id="luminousGlow" cx="28%" cy="18%" r="72%">
+      <stop offset="0%" stop-color="#cbd5e1" stop-opacity="0.24"/>
+      <stop offset="100%" stop-color="#cbd5e1" stop-opacity="0.0"/>
     </radialGradient>
     <linearGradient id="contourBorder" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.55"/>
-      <stop offset="45%" stop-color="#ffffff" stop-opacity="0.18"/>
-      <stop offset="100%" stop-color="#ffffff" stop-opacity="0.08"/>
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.34"/>
+      <stop offset="50%" stop-color="#ffffff" stop-opacity="0.11"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0.05"/>
     </linearGradient>
   </defs>
-  <path d="M 64,13 C 103,13 119,29 119,67 C 119,105 103,121 64,121 C 25,121 9,105 9,67 C 9,29 25,13 64,13 Z" fill="#020617" fill-opacity="0.42"/>
+  <path d="M 64,12.5 C 103,12.5 119,28.5 119,66.5 C 119,104.5 103,120.5 64,120.5 C 25,120.5 9,104.5 9,66.5 C 9,28.5 25,12.5 64,12.5 Z" fill="#050507" fill-opacity="0.46"/>
   <path d="M 64,9 C 103,9 119,25 119,64 C 119,103 103,119 64,119 C 25,119 9,103 9,64 C 9,25 25,9 64,9 Z" fill="url(#bgGrad)"/>
   <path d="M 64,9 C 103,9 119,25 119,64 C 119,103 103,119 64,119 C 25,119 9,103 9,64 C 9,25 25,9 64,9 Z" fill="url(#luminousGlow)"/>
-  <path d="M 64,10.8 C 101.5,10.8 117.2,26.5 117.2,64 C 117.2,101.5 101.5,117.2 64,117.2 C 26.5,117.2 10.8,101.5 10.8,64 C 10.8,26.5 26.5,10.8 64,10.8 Z" fill="none" stroke="url(#contourBorder)" stroke-width="2.2"/>
+  <path d="M 64,10.5 C 101.6,10.5 117.5,26.4 117.5,64 C 117.5,101.6 101.6,117.5 64,117.5 C 26.4,117.5 10.5,101.6 10.5,64 C 10.5,26.4 26.4,10.5 64,10.5 Z" fill="none" stroke="url(#contourBorder)" stroke-width="1.8"/>
   <g>
     
-        <ellipse cx="64" cy="64" rx="38" ry="16" transform="rotate(-28 64 64)" fill="none" stroke="#bae6fd" stroke-width="4.5"/>
-        <ellipse cx="64" cy="64" rx="38" ry="16" transform="rotate(32 64 64)" fill="none" stroke="#c4b5fd" stroke-width="3.5" stroke-opacity="0.8"/>
-        <circle cx="64" cy="64" r="13" fill="#ffffff"/>
+        <ellipse cx="64" cy="64" rx="37" ry="15.5" transform="rotate(-28 64 64)" fill="none" stroke="#e2e8f0" stroke-width="4"/>
+        <ellipse cx="64" cy="64" rx="37" ry="15.5" transform="rotate(32 64 64)" fill="none" stroke="#94a3b8" stroke-width="3.2"/>
+        <circle cx="64" cy="64" r="12" fill="#f8fafc"/>
         
   </g>
 </svg>

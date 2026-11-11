@@ -1,4 +1,3 @@
-use gdk_pixbuf::PixbufLoader;
 use gtk4::gdk;
 use gtk4::glib;
 use gtk4::prelude::*;
@@ -21,22 +20,20 @@ use std::rc::Rc;
 const LOGO_PNG: &[u8] = include_bytes!("../../../data/icons/solar-logo-256.png");
 const SETTINGS_EMBLEM_PNG: &[u8] =
     include_bytes!("../../../data/icons/living-flow/solar-settings-64.png");
+const NAV_CLOCK_PNG: &[u8] = include_bytes!("../../../data/icons/living-flow/nav-clock.png");
+const NAV_TASKBAR_PNG: &[u8] = include_bytes!("../../../data/icons/living-flow/nav-taskbar.png");
+const NAV_DISPLAY_PNG: &[u8] = include_bytes!("../../../data/icons/living-flow/nav-display.png");
+const NAV_SHELL_PNG: &[u8] = include_bytes!("../../../data/icons/living-flow/nav-shell.png");
+const NAV_CAELESTIA_PNG: &[u8] = include_bytes!("../../../data/icons/living-flow/nav-caelestia.png");
+const NAV_NOCTALIA_PNG: &[u8] = include_bytes!("../../../data/icons/living-flow/nav-noctalia.png");
+const NAV_PERF_PNG: &[u8] = include_bytes!("../../../data/icons/living-flow/nav-perf.png");
+const NAV_HEALTH_PNG: &[u8] = include_bytes!("../../../data/icons/living-flow/nav-health.png");
+const NAV_OMNIBAR_PNG: &[u8] = include_bytes!("../../../data/icons/living-flow/nav-omnibar.png");
+const NAV_HUD_PNG: &[u8] = include_bytes!("../../../data/icons/living-flow/nav-hud.png");
+const NAV_ABOUT_PNG: &[u8] = include_bytes!("../../../data/icons/living-flow/nav-about.png");
 
 fn create_logo_image(size: i32) -> Image {
-    let loader = match PixbufLoader::with_type("png") {
-        Ok(l) => l,
-        Err(_) => return Image::new(),
-    };
-    loader.set_size(size, size);
-    if loader.write(LOGO_PNG).is_ok() && loader.close().is_ok() {
-        if let Some(pixbuf) = loader.pixbuf() {
-            let texture = gdk4::Texture::for_pixbuf(&pixbuf);
-            let img = Image::from_paintable(Some(&texture));
-            img.set_pixel_size(size);
-            return img;
-        }
-    }
-    Image::new()
+    load_png_emblem(LOGO_PNG, size)
 }
 
 pub fn launch_settings_window() {
@@ -76,23 +73,23 @@ fn build_settings_ui(main_loop: glib::MainLoop) {
         }
 
         .settings-title {
-            color: #f8fafc;
-            font-size: 20px;
-            font-weight: 800;
+            color: #f5f5f7;
+            font-size: 19px;
+            font-weight: 700;
         }
 
         .settings-subtitle {
-            color: #7dd3fc;
-            font-size: 13px;
-            font-weight: 600;
+            color: #a1a1aa;
+            font-size: 12.5px;
+            font-weight: 500;
         }
 
         .settings-cat-header {
-            color: #94a3b8;
-            font-size: 10.5px;
-            font-weight: 800;
-            letter-spacing: 1.2px;
-            margin: 8px 10px 4px 10px;
+            color: #71717a;
+            font-size: 10.2px;
+            font-weight: 700;
+            letter-spacing: 1.1px;
+            margin: 10px 10px 4px 10px;
         }
     "#;
     apply_living_flow_theme(extra_css);
@@ -316,23 +313,23 @@ fn build_settings_ui(main_loop: glib::MainLoop) {
     a_sec.append(&a_dev);
     about_tab.append(&a_sec);
 
-    // Register pages and build Living Flow grouped navigation pills
-    let pages: Vec<(&str, &str, &str, GtkBox)> = vec![
-        ("GÖRÜNÜM & KİŞİSELLEŞTİRME", "clock", "◎  Pixel Saat & Widget", clock_tab),
-        ("", "taskbar", "▬  Görev Çubuğu", taskbar_tab),
-        ("", "display", "⊞  Ekran & DPI Ölçeği", display_tab),
-        ("KABUK MOTORLARI", "shell", "❖  Kabuk Motoru & Yüzeyler", shell_tab),
-        ("", "caelestia", "✦  Caelestia Düzeni", caelestia_tab),
-        ("", "noctalia", "☾  Noctalia Bar", noctalia_tab),
-        ("SİSTEM & GÜVENLİK", "perf", "⚡  Performans & Aurora", perf_tab),
-        ("", "health", "🛡  Sistem Sağlığı & Kalkan", health_tab),
-        ("", "omnibar", "⌕  Omnibar & Akıllı Arama", omnibar_tab),
-        ("", "hud", "⌨  Kısayollar & Rehber", hud_tab),
-        ("", "about", "ℹ  Hakkında", about_tab),
+    // Register pages and build ColorOS 17 Two-Pane Squircle Navigation Rows (Zero Unicode Tofu!)
+    let pages: Vec<(&str, &str, &[u8], &str, GtkBox)> = vec![
+        ("GÖRÜNÜM & KİŞİSELLEŞTİRME", "clock", NAV_CLOCK_PNG, "Pixel Saat & Widget", clock_tab),
+        ("", "taskbar", NAV_TASKBAR_PNG, "Görev Çubuğu", taskbar_tab),
+        ("", "display", NAV_DISPLAY_PNG, "Ekran & DPI Ölçeği", display_tab),
+        ("KABUK MOTORLARI", "shell", NAV_SHELL_PNG, "Kabuk Motoru & Yüzeyler", shell_tab),
+        ("", "caelestia", NAV_CAELESTIA_PNG, "Caelestia Düzeni", caelestia_tab),
+        ("", "noctalia", NAV_NOCTALIA_PNG, "Noctalia Bar", noctalia_tab),
+        ("SİSTEM & GÜVENLİK", "perf", NAV_PERF_PNG, "Performans & Aurora", perf_tab),
+        ("", "health", NAV_HEALTH_PNG, "Sistem Sağlığı & Kalkan", health_tab),
+        ("", "omnibar", NAV_OMNIBAR_PNG, "Omnibar & Akıllı Arama", omnibar_tab),
+        ("", "hud", NAV_HUD_PNG, "Kısayollar & Rehber", hud_tab),
+        ("", "about", NAV_ABOUT_PNG, "Hakkında", about_tab),
     ];
 
-    let mut nav_buttons: Vec<(String, Button)> = Vec::new();
-    for (group_hdr, page_id, label_txt, widget_box) in pages {
+    let mut nav_buttons: Vec<(String, String, Button)> = Vec::new();
+    for (group_hdr, page_id, icon_bytes, label_txt, widget_box) in pages {
         if !group_hdr.is_empty() {
             let hdr = Label::new(Some(group_hdr));
             hdr.add_css_class("settings-cat-header");
@@ -343,31 +340,35 @@ fn build_settings_ui(main_loop: glib::MainLoop) {
 
         let btn = Button::new();
         btn.add_css_class("lf-nav-pill");
+        let row_box = GtkBox::new(Orientation::Horizontal, 10);
+        let nav_icon = load_png_emblem(icon_bytes, 24);
+        nav_icon.set_valign(gtk4::Align::Center);
+        row_box.append(&nav_icon);
+
         let b_lbl = Label::new(Some(label_txt));
         b_lbl.set_halign(gtk4::Align::Start);
+        b_lbl.set_valign(gtk4::Align::Center);
+        b_lbl.set_hexpand(true);
         b_lbl.set_ellipsize(gtk4::pango::EllipsizeMode::End);
-        btn.set_child(Some(&b_lbl));
+        row_box.append(&b_lbl);
+        btn.set_child(Some(&row_box));
 
         if page_id == "clock" {
             btn.add_css_class("active");
         }
         nav_list.append(&btn);
-        nav_buttons.push((page_id.to_string(), btn));
+        nav_buttons.push((page_id.to_string(), label_txt.to_string(), btn));
     }
 
     let all_btns = Rc::new(nav_buttons);
-    for (page_id, btn) in all_btns.iter() {
+    for (page_id, title_str, btn) in all_btns.iter() {
         let pid = page_id.clone();
+        let t_str = title_str.clone();
         let btns_ref = all_btns.clone();
         let stack_ref = stack.clone();
         let cloud_nav = fluid_cloud.clone();
-        let title_str = btn
-            .child()
-            .and_then(|w| w.downcast::<Label>().ok())
-            .map(|l| l.text().to_string())
-            .unwrap_or_else(|| pid.clone());
         btn.connect_clicked(move |_| {
-            for (other_id, other_btn) in btns_ref.iter() {
+            for (other_id, _, other_btn) in btns_ref.iter() {
                 if other_id == &pid {
                     other_btn.add_css_class("active");
                 } else {
@@ -375,7 +376,7 @@ fn build_settings_ui(main_loop: glib::MainLoop) {
                 }
             }
             stack_ref.set_visible_child_name(&pid);
-            cloud_nav.pulse(&title_str, FluidCloudTone::Info, false);
+            cloud_nav.pulse(&t_str, FluidCloudTone::Info, false);
         });
     }
 

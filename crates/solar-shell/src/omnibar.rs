@@ -79,6 +79,39 @@ pub fn launch_omnibar_window() {
     let _ = std::fs::remove_file(&pid_file);
 }
 
+fn resolve_omnibar_icon(icon_opt: Option<&str>, size: i32) -> Image {
+    let icon_str = icon_opt.unwrap_or("application-x-executable");
+    let mut candidates = Vec::new();
+    if icon_str.starts_with('/') {
+        candidates.push(std::path::PathBuf::from(icon_str));
+    } else {
+        for base in [
+            "/usr/share/icons/hicolor/128x128/apps",
+            "/usr/share/icons/hicolor/256x256/apps",
+            "/usr/share/icons/hicolor/64x64/apps",
+            "/usr/share/icons/hicolor/48x48/apps",
+            "/usr/share/pixmaps",
+        ] {
+            candidates.push(std::path::Path::new(base).join(format!("{}.png", icon_str)));
+        }
+    }
+    for cand in candidates {
+        if cand.exists() {
+            if let Ok(bytes) = std::fs::read(&cand) {
+                let gbytes = glib::Bytes::from(&bytes);
+                if let Ok(texture) = gdk::Texture::from_bytes(&gbytes) {
+                    let img = Image::from_paintable(Some(&texture));
+                    img.set_pixel_size(size);
+                    return img;
+                }
+            }
+        }
+    }
+    let img = Image::from_icon_name(icon_str);
+    img.set_pixel_size(size);
+    img
+}
+
 fn build_omnibar_ui(main_loop: glib::MainLoop) {
     let extra_css = r#"
         window {
@@ -86,30 +119,36 @@ fn build_omnibar_ui(main_loop: glib::MainLoop) {
         }
 
         .omnibar-card {
-            background: linear-gradient(155deg, rgba(11, 16, 28, 0.97) 0%, rgba(18, 26, 44, 0.97) 100%);
-            border: 1px solid rgba(255, 255, 255, 0.16);
-            border-radius: 22px;
+            background: linear-gradient(180deg, rgba(23, 24, 29, 0.98) 0%, rgba(17, 18, 22, 0.98) 100%);
+            border: 1px solid rgba(255, 255, 255, 0.10);
+            border-radius: 24px;
             padding: 18px 20px 14px 20px;
-            box-shadow: 0 22px 54px rgba(2, 6, 23, 0.82);
+            box-shadow: 0 24px 56px rgba(0, 0, 0, 0.78);
         }
 
         .omnibar-entry {
-            background-color: rgba(24, 34, 54, 0.92);
+            background-color: rgba(36, 38, 45, 0.95);
             background-image: none;
-            color: #f8fafc;
-            border: 1px solid rgba(125, 211, 252, 0.28);
+            color: #f4f4f6;
+            border: 1px solid rgba(255, 255, 255, 0.11);
             border-radius: 999px;
-            font-size: 14.5px;
+            font-size: 14px;
             font-weight: 500;
             padding: 10px 20px;
             margin-bottom: 12px;
             transition: all 200ms cubic-bezier(0.22, 1, 0.36, 1);
         }
 
+        .omnibar-entry, .omnibar-entry:focus, .omnibar-entry:focus-within {
+            outline: none;
+            outline-width: 0px;
+            outline-color: transparent;
+        }
+
         .omnibar-entry:focus {
-            border-color: #38bdf8;
-            box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.24);
-            background-color: rgba(30, 42, 66, 0.98);
+            border-color: rgba(255, 255, 255, 0.28);
+            box-shadow: none;
+            background-color: rgba(44, 46, 54, 0.98);
         }
 
         .results-list {
@@ -126,39 +165,39 @@ fn build_omnibar_ui(main_loop: glib::MainLoop) {
         }
 
         .result-row:hover {
-            background-color: rgba(30, 41, 64, 0.72);
-            border-color: rgba(255, 255, 255, 0.12);
+            background-color: rgba(255, 255, 255, 0.055);
+            border-color: rgba(255, 255, 255, 0.09);
         }
 
         .result-row:selected {
-            background: linear-gradient(135deg, rgba(14, 165, 233, 0.22) 0%, rgba(37, 99, 235, 0.28) 100%);
-            border: 1px solid rgba(125, 211, 252, 0.48);
-            box-shadow: 0 4px 16px rgba(14, 165, 233, 0.16);
+            background: rgba(255, 255, 255, 0.105);
+            border: 1px solid rgba(255, 255, 255, 0.16);
+            box-shadow: 0 4px 14px rgba(0, 0, 0, 0.32);
         }
 
         .result-title {
-            color: #f8fafc;
+            color: #f4f4f6;
             font-size: 13.8px;
             font-weight: 700;
         }
 
         .result-subtitle {
-            color: #94a3b8;
+            color: #9ca3af;
             font-size: 11.8px;
         }
 
         .result-badge {
-            background-color: rgba(14, 165, 233, 0.16);
-            color: #bae6fd;
-            border: 1px solid rgba(125, 211, 252, 0.28);
+            background-color: rgba(255, 255, 255, 0.075);
+            color: #d4d4d8;
+            border: 1px solid rgba(255, 255, 255, 0.12);
             border-radius: 999px;
             padding: 3px 11px;
             font-size: 10.5px;
-            font-weight: 800;
+            font-weight: 700;
         }
 
         .footer-hint {
-            color: #94a3b8;
+            color: #8e929b;
             font-size: 11.5px;
             font-weight: 500;
             margin-top: 8px;
@@ -166,23 +205,22 @@ fn build_omnibar_ui(main_loop: glib::MainLoop) {
         }
 
         .omnibar-close-btn {
-            background: rgba(239, 68, 68, 0.20);
+            background: rgba(255, 255, 255, 0.07);
             background-image: none;
-            color: #fecaca;
-            border: 1px solid rgba(248, 113, 113, 0.42);
+            color: #d4d4d8;
+            border: 1px solid rgba(255, 255, 255, 0.12);
             border-radius: 999px;
             padding: 8px 16px;
             margin-bottom: 12px;
             font-size: 12.5px;
-            font-weight: 800;
+            font-weight: 700;
             transition: all 180ms cubic-bezier(0.22, 1, 0.36, 1);
         }
         .omnibar-close-btn:hover {
-            background: rgba(239, 68, 68, 0.78);
+            background: #c83b22;
             background-image: none;
             color: #ffffff;
-            border-color: rgba(254, 202, 202, 0.75);
-            transform: scale(1.03);
+            border-color: rgba(255, 255, 255, 0.25);
         }
         .omnibar-close-btn:active {
             transform: scale(0.95);
@@ -416,12 +454,7 @@ fn build_omnibar_ui(main_loop: glib::MainLoop) {
             row_box.set_hexpand(true);
 
             // Squircle Living Flow Icon
-            let icon = Image::from_icon_name(
-                item.icon_name
-                    .as_deref()
-                    .unwrap_or("application-x-executable"),
-            );
-            icon.set_pixel_size(32);
+            let icon = resolve_omnibar_icon(item.icon_name.as_deref(), 32);
             row_box.append(&icon);
 
             // Text details

@@ -51,20 +51,7 @@ fn create_svg_image(svg_data: &str, size: i32) -> Image {
 }
 
 fn create_png_image(png_data: &[u8], size: i32) -> Image {
-    let loader = match PixbufLoader::with_type("png") {
-        Ok(l) => l,
-        Err(_) => return Image::new(),
-    };
-    loader.set_size(size, size);
-    if loader.write(png_data).is_ok() && loader.close().is_ok() {
-        if let Some(pixbuf) = loader.pixbuf() {
-            let texture = gdk4::Texture::for_pixbuf(&pixbuf);
-            let img = Image::from_paintable(Some(&texture));
-            img.set_pixel_size(size);
-            return img;
-        }
-    }
-    Image::new()
+    crate::living_flow::load_png_emblem(png_data, size)
 }
 
 pub fn launch_gui_window(
@@ -92,56 +79,56 @@ fn generate_taskbar_css(
     let theme = M3Theme::default();
     let is_light = cfg.taskbar.theme_mode == "light";
     let bg_color = if is_light {
-        format!("alpha(#f5f7fa, {:.2})", cfg.taskbar.opacity)
+        format!("alpha(#f5f6f8, {:.2})", cfg.taskbar.opacity)
     } else {
-        format!("alpha(#16191c, {:.2})", cfg.taskbar.opacity)
+        format!("alpha(#15161a, {:.2})", cfg.taskbar.opacity)
     };
     let border_color = if is_light {
-        "alpha(#b0bac2, 0.65)"
+        "alpha(#d4d4d8, 0.72)"
     } else {
-        "alpha(#525c62, 0.45)"
+        "alpha(#ffffff, 0.10)"
     };
     let task_bg = if is_light {
-        "alpha(#e2e6eb, 0.75)"
+        "alpha(#e4e5e9, 0.80)"
     } else {
-        "alpha(#23272a, 0.65)"
+        "alpha(#23252c, 0.78)"
     };
-    let task_color = if is_light { "#1e2429" } else { "#e1e3e5" };
+    let task_color = if is_light { "#18181b" } else { "#e4e4e7" };
     let task_hover = if is_light {
-        "alpha(#d2d9df, 0.95)"
+        "alpha(#d4d6dc, 0.95)"
     } else {
-        "alpha(#2f3539, 0.9)"
+        "alpha(#2e313a, 0.92)"
     };
     let active_bg = if is_light {
-        "alpha(#c3e7ff, 0.85)"
+        "alpha(#ffffff, 0.92)"
     } else {
-        "alpha(#004d67, 0.55)"
+        "alpha(#ffffff, 0.13)"
     };
-    let active_color = if is_light { "#00364c" } else { "#ffffff" };
-    let active_bottom = if is_light { "#0095c7" } else { "#38c8ff" };
+    let active_color = if is_light { "#111215" } else { "#ffffff" };
+    let active_bottom = if is_light { "#cf3f24" } else { "#e54d2e" };
     let clock_bg = if is_light {
-        "alpha(#e2e6eb, 0.85)"
+        "alpha(#e4e5e9, 0.85)"
     } else {
-        "alpha(#23272a, 0.7)"
+        "alpha(#22242b, 0.82)"
     };
-    let clock_color = if is_light { "#192734" } else { "#c4e7ff" };
-    let tray_color = if is_light { "#3b454d" } else { "#b0b8be" };
-    let pinned_color = if is_light { "#1a2a36" } else { "#c4e7ff" };
+    let clock_color = if is_light { "#18181b" } else { "#f4f4f6" };
+    let tray_color = if is_light { "#3f3f46" } else { "#a1a1aa" };
+    let pinned_color = if is_light { "#18181b" } else { "#e4e4e7" };
     let pinned_hover = if is_light {
-        "alpha(#000000, 0.08)"
+        "alpha(#000000, 0.07)"
     } else {
-        "alpha(#ffffff, 0.12)"
+        "alpha(#ffffff, 0.10)"
     };
 
     let box_shadow = if profile.shadows_enabled {
-        "box-shadow: 0 4px 20px rgba(0, 0, 0, 0.55);"
+        "box-shadow: 0 6px 24px rgba(0, 0, 0, 0.58);"
     } else {
         "box-shadow: none;"
     };
 
     let anim_duration = profile.animation_duration_ms;
     let transition_prop = if anim_duration > 0 {
-        format!("transition: all {}ms ease;", anim_duration)
+        format!("transition: all {}ms cubic-bezier(0.22, 1, 0.36, 1);", anim_duration)
     } else {
         "transition: none;".to_string()
     };
@@ -161,24 +148,25 @@ fn generate_taskbar_css(
         .kde-taskbar-container {{
             background-color: {};
             border: 1px solid {};
-            border-radius: 20px;
-            padding: 3px 10px;
+            border-radius: 22px;
+            padding: 4px 10px;
             margin: 2px 14px 4px 14px;
             {}
         }}
 
         .kde-kickoff-btn {{
-            background: linear-gradient(135deg, #0ea5e9, #2563eb);
-            color: #ffffff;
+            background: rgba(255, 255, 255, 0.08);
+            color: #f4f4f6;
             border-radius: 999px;
             padding: 4px 12px;
             margin-right: 6px;
-            border: 1px solid rgba(186, 230, 253, 0.35);
+            border: 1px solid rgba(255, 255, 255, 0.14);
             {}
         }}
 
         .kde-kickoff-btn:hover {{
-            background: linear-gradient(135deg, #38bdf8, #3b82f6);
+            background: rgba(255, 255, 255, 0.15);
+            border-color: rgba(255, 255, 255, 0.24);
         }}
 
         .kde-pinned-btn {{
@@ -210,12 +198,12 @@ fn generate_taskbar_css(
 
         .kde-task-btn:hover {{
             background-color: {};
-            border-color: alpha(#616c72, 0.4);
+            border-color: alpha(#ffffff, 0.14);
         }}
 
         .kde-task-active {{
             background-color: {};
-            border: 1px solid alpha(#0095c7, 0.45);
+            border: 1px solid alpha(#ffffff, 0.18);
             border-bottom: 2px solid {};
             color: {};
             font-weight: 600;
@@ -224,7 +212,7 @@ fn generate_taskbar_css(
         .kde-task-minimized {{
             opacity: 0.65;
             font-style: italic;
-            border-bottom: 2px dashed #0095c7;
+            border-bottom: 2px dashed alpha(#ffffff, 0.32);
         }}
 
         .kde-task-action-btn {{

@@ -25,42 +25,42 @@ const INSTALLER_EXTRA_CSS: &str = r#"
     }
 
     .installer-hero {
-        background: linear-gradient(135deg, rgba(249, 115, 22, 0.16) 0%, rgba(14, 165, 233, 0.14) 100%);
-        border: 1px solid rgba(251, 146, 60, 0.28);
-        border-radius: 20px;
+        background: linear-gradient(135deg, rgba(40, 34, 34, 0.92) 0%, rgba(25, 26, 31, 0.96) 100%);
+        border: 1px solid rgba(255, 255, 255, 0.09);
+        border-radius: 18px;
         padding: 14px 20px;
         margin-bottom: 12px;
     }
 
     .installer-hero-title {
-        font-size: 18.5px;
-        font-weight: 800;
-        color: #ffedd5;
+        font-size: 18px;
+        font-weight: 700;
+        color: #f5f5f7;
     }
 
     .installer-hero-sub {
         font-size: 12px;
-        color: #cbd5e1;
+        color: #a1a1aa;
     }
 
     .stepper-bar {
-        background-color: rgba(15, 23, 42, 0.72);
-        border: 1px solid rgba(255, 255, 255, 0.09);
+        background-color: rgba(24, 26, 31, 0.88);
+        border: 1px solid rgba(255, 255, 255, 0.08);
         border-radius: 999px;
         padding: 6px;
         margin-bottom: 12px;
     }
 
     .stepper-connector {
-        color: rgba(148, 163, 184, 0.45);
+        color: rgba(161, 161, 170, 0.40);
         font-weight: 700;
         font-size: 13px;
     }
 
     .log-view,
     .log-view text {
-        background-color: #060911;
-        color: #a7f3d0;
+        background-color: #0e0f12;
+        color: #d4d4d8;
         font-family: monospace;
         font-size: 12px;
         padding: 12px;
@@ -68,8 +68,8 @@ const INSTALLER_EXTRA_CSS: &str = r#"
     }
 
     .log-frame {
-        background-color: #060911;
-        border: 1px solid rgba(255, 255, 255, 0.10);
+        background-color: #0e0f12;
+        border: 1px solid rgba(255, 255, 255, 0.09);
         border-radius: 16px;
         padding: 4px;
     }

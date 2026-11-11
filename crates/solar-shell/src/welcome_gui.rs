@@ -20,47 +20,48 @@ const WELCOME_EXTRA_CSS: &str = r#"
     }
 
     .welcome-hero {
-        background: linear-gradient(135deg, rgba(14, 165, 233, 0.16) 0%, rgba(249, 115, 22, 0.14) 100%);
-        border: 1px solid rgba(255, 255, 255, 0.13);
-        border-radius: 20px;
+        background: linear-gradient(135deg, rgba(38, 40, 48, 0.92) 0%, rgba(26, 27, 33, 0.96) 100%);
+        border: 1px solid rgba(255, 255, 255, 0.09);
+        border-radius: 18px;
         padding: 14px 20px;
         margin-bottom: 12px;
     }
 
     .welcome-title {
-        color: #f8fafc;
-        font-size: 20px;
-        font-weight: 800;
+        color: #f5f5f7;
+        font-size: 19px;
+        font-weight: 700;
+        letter-spacing: -0.2px;
     }
 
     .welcome-subtitle {
-        color: #7dd3fc;
-        font-size: 12.5px;
-        font-weight: 600;
+        color: #a1a1aa;
+        font-size: 12.2px;
+        font-weight: 500;
     }
 
     .shortcut-grid-card {
-        background: linear-gradient(180deg, rgba(24, 33, 52, 0.82) 0%, rgba(16, 23, 38, 0.88) 100%);
-        border: 1px solid rgba(255, 255, 255, 0.11);
-        border-radius: 20px;
+        background: linear-gradient(180deg, rgba(30, 32, 38, 0.90) 0%, rgba(23, 25, 30, 0.94) 100%);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 18px;
         padding: 14px 18px;
         margin-bottom: 14px;
     }
 
     .lf-keycap {
-        background: linear-gradient(180deg, rgba(51, 65, 85, 0.92), rgba(30, 41, 59, 0.96));
-        color: #bae6fd;
-        border: 1px solid rgba(125, 211, 252, 0.32);
+        background-color: rgba(255, 255, 255, 0.08);
+        color: #f4f4f6;
+        border: 1px solid rgba(255, 255, 255, 0.13);
         border-radius: 999px;
         padding: 4px 12px;
         font-size: 11.5px;
         font-weight: 700;
-        box-shadow: 0 2px 6px rgba(2, 6, 23, 0.35);
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.28);
     }
 
     .shortcut-desc {
-        color: #e2e8f0;
-        font-size: 12.8px;
+        color: #d4d4d8;
+        font-size: 12.6px;
         font-weight: 500;
         margin-left: 8px;
     }
