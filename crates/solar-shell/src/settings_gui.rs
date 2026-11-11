@@ -3,18 +3,24 @@ use gtk4::gdk;
 use gtk4::glib;
 use gtk4::prelude::*;
 use gtk4::{
-    Box as GtkBox, Button, CheckButton, CssProvider, DropDown, Entry, Image, Label,
-    Notebook, Orientation, Separator, StringList, Window,
+    Box as GtkBox, Button, CheckButton, DropDown, Entry, Image, Label, Orientation,
+    ScrolledWindow, Separator, Stack, StackTransitionType, StringList, Window,
 };
 use solar_common::{
     HardwareDetector, HardwareTuningProfile, PerformanceTier, ShellEngine, SolarConfig,
     SurfaceProvider,
 };
+use crate::living_flow::{
+    apply_living_flow_theme, build_living_flow_topbar, load_png_emblem, FluidCloud, FluidCloudTone,
+};
 use crate::pixel_clock::{PixelClockConfig, PixelClockStyle};
 use std::path::PathBuf;
 use std::process::Command;
+use std::rc::Rc;
 
 const LOGO_PNG: &[u8] = include_bytes!("../../../data/icons/solar-logo-256.png");
+const SETTINGS_EMBLEM_PNG: &[u8] =
+    include_bytes!("../../../data/icons/living-flow/solar-settings-64.png");
 
 fn create_logo_image(size: i32) -> Image {
     let loader = match PixbufLoader::with_type("png") {
@@ -64,160 +70,39 @@ fn restart_taskbar_if_enabled() {
 }
 
 fn build_settings_ui(main_loop: glib::MainLoop) {
-    let provider = CssProvider::new();
-    let css = r#"
-        window {
-            background-color: alpha(#16191c, 0.98);
-        }
-
-        .settings-card {
-            padding: 20px;
-        }
-
-        .settings-header {
-            margin-bottom: 16px;
-            padding-bottom: 12px;
-            border-bottom: 1px solid alpha(#525c62, 0.35);
+    let extra_css = r#"
+        .settings-stage {
+            padding: 18px 22px;
         }
 
         .settings-title {
-            color: #ffffff;
+            color: #f8fafc;
             font-size: 20px;
-            font-weight: 700;
+            font-weight: 800;
         }
 
         .settings-subtitle {
-            color: #38c8ff;
+            color: #7dd3fc;
             font-size: 13px;
-            font-weight: 500;
-        }
-
-        .section-box {
-            background-color: alpha(#23272a, 0.65);
-            border: 1px solid alpha(#525c62, 0.35);
-            border-radius: 12px;
-            padding: 16px;
-            margin-bottom: 14px;
-        }
-
-        .section-title {
-            color: #c4e7ff;
-            font-size: 15px;
-            font-weight: 600;
-            margin-bottom: 10px;
-        }
-
-        .setting-row {
-            margin: 8px 0;
-        }
-
-        .setting-label {
-            color: #e1e3e5;
-            font-size: 13px;
-            font-weight: 500;
-        }
-
-        .setting-subtext {
-            color: #8a9297;
-            font-size: 11px;
-        }
-
-        .action-btn {
-            background: linear-gradient(135deg, #007ba4, #0095c7);
-            color: #ffffff;
-            border-radius: 6px;
-            padding: 6px 14px;
-            font-size: 13px;
-            font-weight: 500;
-            border: none;
-            transition: all 120ms ease;
-        }
-
-        .action-btn:hover {
-            background: linear-gradient(135deg, #008ebf, #14a8dc);
-        }
-
-        .secondary-btn {
-            background-color: alpha(#303437, 0.8);
-            color: #c4e7ff;
-            border-radius: 6px;
-            padding: 6px 14px;
-            font-size: 13px;
-            border: 1px solid alpha(#525c62, 0.4);
-        }
-
-        .secondary-btn:hover {
-            background-color: alpha(#40484d, 0.9);
-        }
-
-        .status-badge-ok {
-            color: #4ade80;
-            background-color: alpha(#22c55e, 0.15);
-            border: 1px solid alpha(#22c55e, 0.35);
-            border-radius: 6px;
-            padding: 2px 8px;
-            font-size: 11px;
             font-weight: 600;
         }
 
-        .status-badge-info {
-            color: #38c8ff;
-            background-color: alpha(#0095c7, 0.15);
-            border: 1px solid alpha(#0095c7, 0.35);
-            border-radius: 6px;
-            padding: 2px 8px;
-            font-size: 11px;
-            font-weight: 600;
-        }
-
-        .danger-btn {
-            background: linear-gradient(135deg, #c53030, #e53e3e);
-            color: #ffffff;
-            border-radius: 6px;
-            padding: 6px 14px;
-            font-size: 13px;
-            font-weight: 500;
-            border: none;
-            transition: all 120ms ease;
-        }
-
-        .danger-btn:hover {
-            background: linear-gradient(135deg, #e53e3e, #f56565);
-        }
-
-        notebook > header {
-            background-color: alpha(#1e2226, 0.8);
-            border-radius: 10px;
-            margin-bottom: 12px;
-            border: 1px solid alpha(#525c62, 0.3);
-        }
-
-        notebook > header > tabs > tab {
-            color: #b0b8be;
-            font-weight: 600;
-            padding: 8px 16px;
-            font-size: 13px;
-        }
-
-        notebook > header > tabs > tab:checked {
-            color: #38c8ff;
-            border-bottom: 2px solid #38c8ff;
+        .settings-cat-header {
+            color: #94a3b8;
+            font-size: 10.5px;
+            font-weight: 800;
+            letter-spacing: 1.2px;
+            margin: 8px 10px 4px 10px;
         }
     "#;
-    provider.load_from_string(css);
-
-    if let Some(display) = gdk::Display::default() {
-        gtk4::style_context_add_provider_for_display(
-            &display,
-            &provider,
-            gtk4::STYLE_PROVIDER_PRIORITY_APPLICATION,
-        );
-    }
+    apply_living_flow_theme(extra_css);
 
     let window = Window::builder()
-        .title("SolarUI Ayarları - Masaüstü ve Görev Çubuğu")
-        .default_width(720)
-        .default_height(580)
+        .title("SolarUI Ayarları — Masaüstü ve Görev Çubuğu")
+        .decorated(false)
+        .default_width(1020)
+        .default_height(620)
+        .resizable(true)
         .build();
 
     let loop_quit = main_loop.clone();
@@ -226,67 +111,79 @@ fn build_settings_ui(main_loop: glib::MainLoop) {
         glib::Propagation::Proceed
     });
 
-    let root_box = GtkBox::new(Orientation::Vertical, 0);
-    root_box.add_css_class("settings-card");
+    let key_ctrl = gtk4::EventControllerKey::new();
+    let win_esc = window.downgrade();
+    key_ctrl.connect_key_pressed(move |_, key, _, _| {
+        if key == gdk::Key::Escape {
+            if let Some(w) = win_esc.upgrade() {
+                w.close();
+            }
+            return glib::Propagation::Stop;
+        }
+        glib::Propagation::Proceed
+    });
+    window.add_controller(key_ctrl);
 
-    // Header
-    let header_box = GtkBox::new(Orientation::Horizontal, 14);
-    header_box.add_css_class("settings-header");
+    let shell_box = GtkBox::new(Orientation::Vertical, 0);
+    shell_box.add_css_class("lf-window-shell");
 
-    let logo = create_logo_image(44);
-    header_box.append(&logo);
+    let fluid_cloud = FluidCloud::new("Living Flow • Ayarlar Senkronize");
+    let emblem = load_png_emblem(SETTINGS_EMBLEM_PNG, 34);
+    let loop_top = main_loop.clone();
+    let topbar = build_living_flow_topbar(
+        &window,
+        Some(emblem),
+        "SolarUI Masaüstü Ayarları",
+        "Blaze Universe • ColorOS 17 Living Flow Kontrol Paneli",
+        &fluid_cloud,
+        Some(Box::new(move || loop_top.quit())),
+    );
+    shell_box.append(&topbar);
 
-    let text_box = GtkBox::new(Orientation::Vertical, 2);
-    let title = Label::new(Some("SolarUI Masaüstü Ayarları"));
-    title.add_css_class("settings-title");
-    title.set_halign(gtk4::Align::Start);
-    text_box.append(&title);
+    // Two-Pane Living Flow Layout: Left Capsule Navigation Rail + Right Fluid Stack
+    let split_box = GtkBox::new(Orientation::Horizontal, 0);
+    split_box.set_vexpand(true);
+    split_box.set_hexpand(true);
 
-    let subtitle = Label::new(Some("SolarUI kontrol paneli"));
-    subtitle.add_css_class("settings-subtitle");
-    subtitle.set_halign(gtk4::Align::Start);
-    text_box.append(&subtitle);
+    let sidebar_scroll = ScrolledWindow::builder()
+        .hscrollbar_policy(gtk4::PolicyType::Never)
+        .vscrollbar_policy(gtk4::PolicyType::Automatic)
+        .min_content_width(228)
+        .vexpand(true)
+        .build();
+    sidebar_scroll.add_css_class("lf-sidebar");
 
-    header_box.append(&text_box);
-    root_box.append(&header_box);
+    let nav_list = GtkBox::new(Orientation::Vertical, 2);
 
-    // Tabbed interface
-    let notebook = Notebook::new();
+    let stage_scroll = ScrolledWindow::builder()
+        .hscrollbar_policy(gtk4::PolicyType::Never)
+        .vscrollbar_policy(gtk4::PolicyType::Automatic)
+        .hexpand(true)
+        .vexpand(true)
+        .build();
 
-    // ── TAB 1: GOOGLE PIXEL SAAT & MASAÜSTÜ WIDGET'I ────────────────────────
+    let stack = Stack::new();
+    stack.set_hhomogeneous(false);
+    stack.set_vhomogeneous(false);
+    stack.set_transition_type(StackTransitionType::SlideUpDown);
+    stack.set_transition_duration(240);
+    stack.add_css_class("settings-stage");
+
+    // ── BUILD ALL PAGES ───────────────────────────────────────────────────────
     let clock_tab = build_pixel_clock_tab();
-    notebook.append_page(&clock_tab, Some(&Label::new(Some("Pixel Saat & Widget"))));
-
-    // ── TAB 2: GÖREV ÇUBUĞU (Taskbar Özelleştirme & Stiller) ─────────────────
     let taskbar_tab = build_taskbar_tab();
-    notebook.append_page(&taskbar_tab, Some(&Label::new(Some("Görev Çubuğu"))));
-
-    // ── TAB 3: EKRAN VE ARAYÜZ ÖLÇEĞİ (Display & UI Scale) ───────────────────
     let display_tab = build_display_tab();
-    notebook.append_page(&display_tab, Some(&Label::new(Some("Ekran & Ölçek"))));
-
     let shell_tab = build_shell_tab();
-    notebook.append_page(&shell_tab, Some(&Label::new(Some("Kabuk Motoru & Yüzeyler"))));
-
     let perf_tab = build_performance_tab();
-    notebook.append_page(&perf_tab, Some(&Label::new(Some("Performans"))));
-
     let health_tab = build_health_tab();
-    notebook.append_page(&health_tab, Some(&Label::new(Some("Sistem Sağlığı"))));
-
-    // ── TAB: CAELESTIA / HIBRIT ÖZELLEŞTİRME ─────────────────────────────────
     let caelestia_tab = build_caelestia_tab();
-    notebook.append_page(&caelestia_tab, Some(&Label::new(Some("Caelestia / Hibrit Düzeni"))));
 
-    // ── TAB: NOCTALIA ÜST BARI VE HIZLI BAĞLANTILAR ─────────────────────────
+    // Noctalia Bar Quick Control Page
     let noctalia_tab = GtkBox::new(Orientation::Vertical, 12);
-    noctalia_tab.set_margin_top(10);
-    noctalia_tab.set_margin_bottom(10);
-
     let n_sec = GtkBox::new(Orientation::Vertical, 12);
     n_sec.add_css_class("section-box");
 
-    let n_title = Label::new(Some("Noctalia Bar ve Kontrol Panelleri"));
+    let n_title = Label::new(Some("Noctalia Bar ve Hızlı Kontrol Panelleri"));
     n_title.add_css_class("section-title");
     n_title.set_halign(gtk4::Align::Start);
     n_sec.append(&n_title);
@@ -296,17 +193,17 @@ fn build_settings_ui(main_loop: glib::MainLoop) {
     ));
     n_desc.add_css_class("setting-subtext");
     n_desc.set_wrap(true);
+    n_desc.set_xalign(0.0);
     n_desc.set_halign(gtk4::Align::Start);
     n_sec.append(&n_desc);
 
-    let btn_grid = GtkBox::new(Orientation::Horizontal, 12);
-
+    let btn_grid = GtkBox::new(Orientation::Horizontal, 10);
+    let cloud_noc = fluid_cloud.clone();
     let btn_settings = Button::with_label("Noctalia Ayarları");
     btn_settings.add_css_class("action-btn");
-    btn_settings.connect_clicked(|_| {
-        let _ = Command::new("noctalia")
-            .args(["msg", "settings-toggle"])
-            .spawn();
+    btn_settings.connect_clicked(move |_| {
+        cloud_noc.pulse("Noctalia ayar paneli açıldı", FluidCloudTone::Info, false);
+        let _ = Command::new("noctalia").args(["msg", "settings-toggle"]).spawn();
     });
     btn_grid.append(&btn_settings);
 
@@ -319,7 +216,7 @@ fn build_settings_ui(main_loop: glib::MainLoop) {
     });
     btn_grid.append(&btn_cc);
 
-    let btn_wp = Button::with_label("Duvar Kağıdı Seçici");
+    let btn_wp = Button::with_label("Duvar Kağıdı");
     btn_wp.add_css_class("secondary-btn");
     btn_wp.connect_clicked(|_| {
         let _ = Command::new("noctalia")
@@ -340,17 +237,10 @@ fn build_settings_ui(main_loop: glib::MainLoop) {
     n_sec.append(&btn_grid);
     noctalia_tab.append(&n_sec);
 
-    notebook.append_page(&noctalia_tab, Some(&Label::new(Some("Noctalia Bar"))));
-
-    // ── TAB: OMNIBAR & AKILLI ARAMA AYARLARI ─────────────────────────────────
     let omnibar_tab = build_omnibar_tab();
-    notebook.append_page(&omnibar_tab, Some(&Label::new(Some("Omnibar & Arama"))));
 
-    // ── TAB 3: KISAYOLLAR & KARŞILAMA HUD ─────────────────────────────────────
+    // Shortcuts & Welcome HUD Page
     let hud_tab = GtkBox::new(Orientation::Vertical, 12);
-    hud_tab.set_margin_top(10);
-    hud_tab.set_margin_bottom(10);
-
     let h_sec = GtkBox::new(Orientation::Vertical, 12);
     h_sec.add_css_class("section-box");
 
@@ -363,11 +253,14 @@ fn build_settings_ui(main_loop: glib::MainLoop) {
         "Başlangıç karşılama ekranını, sistem klavye kısayollarını ve kurulum yardımcısını yapılandırın.",
     ));
     h_sub.add_css_class("setting-subtext");
+    h_sub.set_wrap(true);
+    h_sub.set_xalign(0.0);
     h_sub.set_halign(gtk4::Align::Start);
     h_sec.append(&h_sub);
 
     let open_welcome_btn = Button::with_label("Kısayol ve Karşılama Ekranını Şimdi Aç");
     open_welcome_btn.add_css_class("action-btn");
+    open_welcome_btn.set_halign(gtk4::Align::Start);
     open_welcome_btn.connect_clicked(|_| {
         let _ = Command::new("solar-shell").arg("welcome").spawn();
     });
@@ -376,40 +269,37 @@ fn build_settings_ui(main_loop: glib::MainLoop) {
     let cfg = SolarConfig::load();
     let chk_startup = CheckButton::with_label("Oturum açıldığında karşılama ekranını otomatik göster");
     chk_startup.set_active(cfg.shortcuts_hud.show_at_startup);
-    chk_startup.connect_toggled(|cb| {
+    let cloud_hud = fluid_cloud.clone();
+    chk_startup.connect_toggled(move |cb| {
         let mut c = SolarConfig::load();
         c.shortcuts_hud.show_at_startup = cb.is_active();
         let _ = c.save();
+        cloud_hud.pulse("Karşılama tercihi kaydedildi", FluidCloudTone::Success, false);
     });
     h_sec.append(&chk_startup);
-
     hud_tab.append(&h_sec);
-    notebook.append_page(&hud_tab, Some(&Label::new(Some("Kısayollar"))));
 
-    // ── TAB 4: HAKKINDA & SOLARUI İMZASI ──────────────────────────────────────
+    // About Page
     let about_tab = GtkBox::new(Orientation::Vertical, 12);
-    about_tab.set_margin_top(10);
-    about_tab.set_margin_bottom(10);
-
     let a_sec = GtkBox::new(Orientation::Vertical, 12);
     a_sec.add_css_class("section-box");
-    a_sec.set_halign(gtk4::Align::Center);
+    a_sec.set_halign(gtk4::Align::Fill);
 
     let big_logo = create_logo_image(80);
     big_logo.set_halign(gtk4::Align::Center);
     a_sec.append(&big_logo);
 
-    let a_name = Label::new(Some("SolarUI Masaüstü Ortamı (BlazeOS Edition)"));
+    let a_name = Label::new(Some("SolarUI Masaüstü Ortamı (Blaze Universe Edition)"));
     a_name.add_css_class("settings-title");
     a_name.set_halign(gtk4::Align::Center);
     a_sec.append(&a_name);
 
-    let a_sig = Label::new(Some("Modern , zarif ve asil bir ortam"));
+    let a_sig = Label::new(Some("ColorOS 17 Living Flow Design • Luminous Rendering & Aurora Physics"));
     a_sig.add_css_class("settings-subtitle");
     a_sig.set_halign(gtk4::Align::Center);
     a_sec.append(&a_sig);
 
-    let a_ver = Label::new(Some("Sürüm 1.0.0 (Rust + GTK4 + Wayland)"));
+    let a_ver = Label::new(Some("Sürüm 1.1.0 (Rust + GTK4 + Niri Wayland + Linux 7.2.9)"));
     a_ver.add_css_class("setting-subtext");
     a_ver.set_halign(gtk4::Align::Center);
     a_sec.append(&a_ver);
@@ -417,18 +307,87 @@ fn build_settings_ui(main_loop: glib::MainLoop) {
     let sep = Separator::new(Orientation::Horizontal);
     a_sec.append(&sep);
 
-    let a_dev = Label::new(Some("Geliştirici: Bulut Ars. E. (DarkMorpheus) & BlazeOS Project\nGoogle Material 3 ikon standardı."));
+    let a_dev = Label::new(Some(
+        "Geliştirici: Bulut Ars. E. (DarkMorpheus) & Blaze Universe Project\nYerli Bağımsız Linux Tabanı • Portadora (.blz) & Flathub Hibrit Mimari",
+    ));
     a_dev.add_css_class("setting-label");
     a_dev.set_justify(gtk4::Justification::Center);
     a_dev.set_halign(gtk4::Align::Center);
     a_sec.append(&a_dev);
-
     about_tab.append(&a_sec);
-    notebook.append_page(&about_tab, Some(&Label::new(Some("Hakkında"))));
 
-    root_box.append(&notebook);
+    // Register pages and build Living Flow grouped navigation pills
+    let pages: Vec<(&str, &str, &str, GtkBox)> = vec![
+        ("GÖRÜNÜM & KİŞİSELLEŞTİRME", "clock", "◎  Pixel Saat & Widget", clock_tab),
+        ("", "taskbar", "▬  Görev Çubuğu", taskbar_tab),
+        ("", "display", "⊞  Ekran & DPI Ölçeği", display_tab),
+        ("KABUK MOTORLARI", "shell", "❖  Kabuk Motoru & Yüzeyler", shell_tab),
+        ("", "caelestia", "✦  Caelestia Düzeni", caelestia_tab),
+        ("", "noctalia", "☾  Noctalia Bar", noctalia_tab),
+        ("SİSTEM & GÜVENLİK", "perf", "⚡  Performans & Aurora", perf_tab),
+        ("", "health", "🛡  Sistem Sağlığı & Kalkan", health_tab),
+        ("", "omnibar", "⌕  Omnibar & Akıllı Arama", omnibar_tab),
+        ("", "hud", "⌨  Kısayollar & Rehber", hud_tab),
+        ("", "about", "ℹ  Hakkında", about_tab),
+    ];
 
-    window.set_child(Some(&root_box));
+    let mut nav_buttons: Vec<(String, Button)> = Vec::new();
+    for (group_hdr, page_id, label_txt, widget_box) in pages {
+        if !group_hdr.is_empty() {
+            let hdr = Label::new(Some(group_hdr));
+            hdr.add_css_class("settings-cat-header");
+            hdr.set_halign(gtk4::Align::Start);
+            nav_list.append(&hdr);
+        }
+        stack.add_named(&widget_box, Some(page_id));
+
+        let btn = Button::new();
+        btn.add_css_class("lf-nav-pill");
+        let b_lbl = Label::new(Some(label_txt));
+        b_lbl.set_halign(gtk4::Align::Start);
+        b_lbl.set_ellipsize(gtk4::pango::EllipsizeMode::End);
+        btn.set_child(Some(&b_lbl));
+
+        if page_id == "clock" {
+            btn.add_css_class("active");
+        }
+        nav_list.append(&btn);
+        nav_buttons.push((page_id.to_string(), btn));
+    }
+
+    let all_btns = Rc::new(nav_buttons);
+    for (page_id, btn) in all_btns.iter() {
+        let pid = page_id.clone();
+        let btns_ref = all_btns.clone();
+        let stack_ref = stack.clone();
+        let cloud_nav = fluid_cloud.clone();
+        let title_str = btn
+            .child()
+            .and_then(|w| w.downcast::<Label>().ok())
+            .map(|l| l.text().to_string())
+            .unwrap_or_else(|| pid.clone());
+        btn.connect_clicked(move |_| {
+            for (other_id, other_btn) in btns_ref.iter() {
+                if other_id == &pid {
+                    other_btn.add_css_class("active");
+                } else {
+                    other_btn.remove_css_class("active");
+                }
+            }
+            stack_ref.set_visible_child_name(&pid);
+            cloud_nav.pulse(&title_str, FluidCloudTone::Info, false);
+        });
+    }
+
+    stack.set_visible_child_name("clock");
+    sidebar_scroll.set_child(Some(&nav_list));
+    stage_scroll.set_child(Some(&stack));
+
+    split_box.append(&sidebar_scroll);
+    split_box.append(&stage_scroll);
+    shell_box.append(&split_box);
+
+    window.set_child(Some(&shell_box));
     window.present();
 }
 

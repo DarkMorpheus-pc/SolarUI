@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#059669"/>
+      <stop offset="100%" stop-color="#0f172a"/>
+    </linearGradient>
+    <radialGradient id="luminousGlow" cx="26%" cy="20%" r="74%">
+      <stop offset="0%" stop-color="#34d399" stop-opacity="0.46"/>
+      <stop offset="100%" stop-color="#34d399" stop-opacity="0.0"/>
+    </radialGradient>
+    <linearGradient id="contourBorder" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.55"/>
+      <stop offset="45%" stop-color="#ffffff" stop-opacity="0.18"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0.08"/>
+    </linearGradient>
+  </defs>
+  <path d="M 64,13 C 103,13 119,29 119,67 C 119,105 103,121 64,121 C 25,121 9,105 9,67 C 9,29 25,13 64,13 Z" fill="#020617" fill-opacity="0.42"/>
+  <path d="M 64,9 C 103,9 119,25 119,64 C 119,103 103,119 64,119 C 25,119 9,103 9,64 C 9,25 25,9 64,9 Z" fill="url(#bgGrad)"/>
+  <path d="M 64,9 C 103,9 119,25 119,64 C 119,103 103,119 64,119 C 25,119 9,103 9,64 C 9,25 25,9 64,9 Z" fill="url(#luminousGlow)"/>
+  <path d="M 64,10.8 C 101.5,10.8 117.2,26.5 117.2,64 C 117.2,101.5 101.5,117.2 64,117.2 C 26.5,117.2 10.8,101.5 10.8,64 C 10.8,26.5 26.5,10.8 64,10.8 Z" fill="none" stroke="url(#contourBorder)" stroke-width="2.2"/>
+  <g>
+    
+        <path d="M 38,48 L 90,48 C 99,48 104,56 101,69 L 97,83 C 95,90 87,92 82,86 L 74,77 L 54,77 L 46,86 C 41,92 33,90 31,83 L 27,69 C 24,56 29,48 38,48 Z" fill="#f8fafc" fill-opacity="0.95"/>
+        <line x1="45" y1="58" x2="45" y2="70" stroke="#0f172a" stroke-width="4.5" stroke-linecap="round"/>
+        <line x1="39" y1="64" x2="51" y2="64" stroke="#0f172a" stroke-width="4.5" stroke-linecap="round"/>
+        <circle cx="80" cy="60" r="3.6" fill="#10b981"/>
+        <circle cx="87" cy="66" r="3.6" fill="#0ea5e9"/>
+        <circle cx="73" cy="66" r="3.6" fill="#f97316"/>
+        
+  </g>
+</svg>

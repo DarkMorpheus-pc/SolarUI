@@ -12,13 +12,14 @@ use gtk4::gdk;
 use gtk4::glib;
 use gtk4::prelude::*;
 use gtk4::{
-    Box as GtkBox, CssProvider, Entry, EventControllerKey, Image, Label, ListBox,
-    ListBoxRow, Orientation, ScrolledWindow, Window,
+    Box as GtkBox, Entry, EventControllerKey, Image, Label, ListBox, ListBoxRow, Orientation,
+    ScrolledWindow, Window,
 };
 use std::process::Command;
 use std::sync::{Arc, Mutex};
 
 use crate::apps::{scan_desktop_applications, AppInfo};
+use crate::living_flow::{apply_living_flow_theme, FluidCloud, FluidCloudTone};
 
 #[derive(Clone, Debug)]
 pub enum OmnibarItemType {
@@ -79,33 +80,36 @@ pub fn launch_omnibar_window() {
 }
 
 fn build_omnibar_ui(main_loop: glib::MainLoop) {
-    let provider = CssProvider::new();
-    let css = r#"
+    let extra_css = r#"
         window {
             background-color: transparent;
         }
 
         .omnibar-card {
-            background-color: rgba(18, 22, 27, 0.97);
-            border: 1px solid rgba(255, 255, 255, 0.12);
-            border-radius: 18px;
-            padding: 16px;
-            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.85);
+            background: linear-gradient(155deg, rgba(11, 16, 28, 0.97) 0%, rgba(18, 26, 44, 0.97) 100%);
+            border: 1px solid rgba(255, 255, 255, 0.16);
+            border-radius: 22px;
+            padding: 18px 20px 14px 20px;
+            box-shadow: 0 22px 54px rgba(2, 6, 23, 0.82);
         }
 
         .omnibar-entry {
-            background-color: rgba(28, 34, 43, 0.95);
-            color: #ffffff;
-            border: 1px solid rgba(255, 255, 255, 0.14);
-            border-radius: 12px;
-            font-size: 15px;
-            padding: 10px 16px;
+            background-color: rgba(24, 34, 54, 0.92);
+            background-image: none;
+            color: #f8fafc;
+            border: 1px solid rgba(125, 211, 252, 0.28);
+            border-radius: 999px;
+            font-size: 14.5px;
+            font-weight: 500;
+            padding: 10px 20px;
             margin-bottom: 12px;
+            transition: all 200ms cubic-bezier(0.22, 1, 0.36, 1);
         }
 
         .omnibar-entry:focus {
-            border-color: rgba(255, 255, 255, 0.4);
-            box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.15);
+            border-color: #38bdf8;
+            box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.24);
+            background-color: rgba(30, 42, 66, 0.98);
         }
 
         .results-list {
@@ -113,78 +117,84 @@ fn build_omnibar_ui(main_loop: glib::MainLoop) {
         }
 
         .result-row {
-            background-color: transparent;
-            border-radius: 10px;
-            padding: 8px 12px;
-            margin-bottom: 4px;
-            transition: all 100ms ease;
+            background-color: rgba(255, 255, 255, 0.02);
+            border: 1px solid transparent;
+            border-radius: 16px;
+            padding: 9px 14px;
+            margin-bottom: 5px;
+            transition: all 160ms cubic-bezier(0.22, 1, 0.36, 1);
         }
 
-        .result-row:selected, .result-row:hover {
-            background-color: #262e38;
-            border: 1px solid rgba(255, 255, 255, 0.18);
+        .result-row:hover {
+            background-color: rgba(30, 41, 64, 0.72);
+            border-color: rgba(255, 255, 255, 0.12);
+        }
+
+        .result-row:selected {
+            background: linear-gradient(135deg, rgba(14, 165, 233, 0.22) 0%, rgba(37, 99, 235, 0.28) 100%);
+            border: 1px solid rgba(125, 211, 252, 0.48);
+            box-shadow: 0 4px 16px rgba(14, 165, 233, 0.16);
         }
 
         .result-title {
-            color: #ffffff;
-            font-size: 14px;
-            font-weight: 600;
-        }
-
-        .result-subtitle {
-            color: #8f9ca8;
-            font-size: 12px;
-        }
-
-        .result-badge {
-            background-color: rgba(255, 255, 255, 0.08);
-            color: #cbd5e1;
-            border: 1px solid rgba(255, 255, 255, 0.12);
-            border-radius: 6px;
-            padding: 2px 8px;
-            font-size: 11px;
+            color: #f8fafc;
+            font-size: 13.8px;
             font-weight: 700;
         }
 
+        .result-subtitle {
+            color: #94a3b8;
+            font-size: 11.8px;
+        }
+
+        .result-badge {
+            background-color: rgba(14, 165, 233, 0.16);
+            color: #bae6fd;
+            border: 1px solid rgba(125, 211, 252, 0.28);
+            border-radius: 999px;
+            padding: 3px 11px;
+            font-size: 10.5px;
+            font-weight: 800;
+        }
+
         .footer-hint {
-            color: #6c7886;
-            font-size: 11px;
+            color: #94a3b8;
+            font-size: 11.5px;
+            font-weight: 500;
             margin-top: 8px;
-            padding-left: 6px;
+            padding-left: 4px;
         }
 
         .omnibar-close-btn {
             background: rgba(239, 68, 68, 0.20);
             background-image: none;
-            color: #fca5a5;
-            border: 1px solid rgba(239, 68, 68, 0.40);
-            border-radius: 12px;
-            padding: 8px 14px;
+            color: #fecaca;
+            border: 1px solid rgba(248, 113, 113, 0.42);
+            border-radius: 999px;
+            padding: 8px 16px;
             margin-bottom: 12px;
-            font-size: 13px;
-            font-weight: 700;
+            font-size: 12.5px;
+            font-weight: 800;
+            transition: all 180ms cubic-bezier(0.22, 1, 0.36, 1);
         }
         .omnibar-close-btn:hover {
-            background: rgba(239, 68, 68, 0.38);
+            background: rgba(239, 68, 68, 0.78);
             background-image: none;
             color: #ffffff;
-            border-color: rgba(239, 68, 68, 0.65);
+            border-color: rgba(254, 202, 202, 0.75);
+            transform: scale(1.03);
+        }
+        .omnibar-close-btn:active {
+            transform: scale(0.95);
         }
     "#;
-    provider.load_from_string(css);
-
-    if let Some(display) = gdk::Display::default() {
-        gtk4::style_context_add_provider_for_display(
-            &display,
-            &provider,
-            gtk4::STYLE_PROVIDER_PRIORITY_APPLICATION,
-        );
-    }
+    apply_living_flow_theme(extra_css);
 
     let window = Window::builder()
         .title("SolarUI Omnibar")
-        .default_width(680)
-        .default_height(460)
+        .decorated(false)
+        .default_width(700)
+        .default_height(470)
         .resizable(false)
         .build();
 
@@ -198,12 +208,12 @@ fn build_omnibar_ui(main_loop: glib::MainLoop) {
     let root_box = GtkBox::new(Orientation::Vertical, 0);
     root_box.add_css_class("omnibar-card");
 
-    // Search input + visible Close (Esc) button row
-    let top_row = GtkBox::new(Orientation::Horizontal, 8);
+    // Search input + visible Close (Esc) capsule row
+    let top_row = GtkBox::new(Orientation::Horizontal, 10);
     let entry = Entry::new();
     entry.add_css_class("omnibar-entry");
     entry.set_hexpand(true);
-    entry.set_placeholder_text(Some("Komut, uygulama, pano (cb), matematik veya kur çevir... (örn: store, install, cb, 100 usd to try)"));
+    entry.set_placeholder_text(Some("Uygulama, komut, matematik (=25*64), döviz (100 usd to try) veya pano (cb)..."));
     top_row.append(&entry);
 
     let close_btn = gtk4::Button::with_label("✕ Esc");
@@ -234,13 +244,17 @@ fn build_omnibar_ui(main_loop: glib::MainLoop) {
     scrolled.set_child(Some(&list_box));
     root_box.append(&scrolled);
 
-    // Footer hints
+    // Footer hints + Live Fluid Cloud capsule
     let footer_box = GtkBox::new(Orientation::Horizontal, 12);
-    let hint_label = Label::new(Some("Yön Tuşları: Seç • Enter: Çalıştır / Kopyala • Esc: Kapat"));
+    footer_box.set_margin_top(6);
+    let hint_label = Label::new(Some("↑↓ Seç  •  Enter Çalıştır / Kopyala  •  Esc Kapat"));
     hint_label.add_css_class("footer-hint");
     hint_label.set_hexpand(true);
     hint_label.set_halign(gtk4::Align::Start);
     footer_box.append(&hint_label);
+
+    let fluid_cloud = FluidCloud::new("Living Flow Arama Hazır");
+    footer_box.append(fluid_cloud.widget());
     root_box.append(&footer_box);
 
     window.set_child(Some(&root_box));
@@ -364,6 +378,7 @@ fn build_omnibar_ui(main_loop: glib::MainLoop) {
     let list_clone = list_box.clone();
     let apps_clone = cached_apps.clone();
     let items_store = current_items.clone();
+    let cloud_search = fluid_cloud.clone();
 
     let update_results = move |query: &str| {
         // Clear list
@@ -372,6 +387,23 @@ fn build_omnibar_ui(main_loop: glib::MainLoop) {
         }
 
         let new_items = generate_omnibar_items(query, &apps_clone);
+        let count = new_items.len();
+        if query.trim().is_empty() {
+            cloud_search.pulse(
+                &format!("{} hızlı komut & uygulama", count),
+                FluidCloudTone::Info,
+                false,
+            );
+        } else if count > 0 {
+            cloud_search.pulse(
+                &format!("{} eşleşme bulundu", count),
+                FluidCloudTone::Success,
+                false,
+            );
+        } else {
+            cloud_search.pulse("Eşleşme bulunamadı", FluidCloudTone::Warning, false);
+        }
+
         if let Ok(mut lock) = items_store.lock() {
             *lock = new_items.clone();
         }
@@ -380,12 +412,16 @@ fn build_omnibar_ui(main_loop: glib::MainLoop) {
             let row = ListBoxRow::new();
             row.add_css_class("result-row");
 
-            let row_box = GtkBox::new(Orientation::Horizontal, 12);
+            let row_box = GtkBox::new(Orientation::Horizontal, 14);
             row_box.set_hexpand(true);
 
-            // Icon
-            let icon = Image::from_icon_name(item.icon_name.as_deref().unwrap_or("application-x-executable"));
-            icon.set_pixel_size(24);
+            // Squircle Living Flow Icon
+            let icon = Image::from_icon_name(
+                item.icon_name
+                    .as_deref()
+                    .unwrap_or("application-x-executable"),
+            );
+            icon.set_pixel_size(32);
             row_box.append(&icon);
 
             // Text details
@@ -702,17 +738,16 @@ fn generate_omnibar_items(raw_query: &str, apps: &[AppInfo]) -> Vec<OmnibarItem>
 
     // 4. System quick actions
     let sys_commands = [
-        ("store", "FireHub Uygulama Mağazası", "Portadora (.blz) ve Flathub uygulama mağazasını aç", "firehub", "system-software-install"),
-        ("install", "BlazeOS Sistem Kurucusu (Solar Installer)", "BlazeOS'u sabit diske grafiksel sihirbaz ile kur", "solar-shell installer", "drive-harddisk"),
-        ("welcome", "BlazeOS Karşılama & Rehber Merkezi", "Kısayol rehberi, kabuk seçici ve sistem araçları", "solar-shell welcome", "system-help"),
-        ("game", "Blaze GameZone Tam Ekran Oyun Kabuğu", "Steam Deck / Xbox UI Konsol Modunu ve Proton-GE Yöneticisini Başlat", "solar-shell gamezone", "input-gaming"),
-        ("berp", "Blaze Emergency Recovery Protocol (BERP)", "Kurtarma, Portadora Doğrulama ve Zaman Makinesi Konsolunu Başlat", "alacritty -e blaze-recovery", "system-error"),
-        ("kurtarma", "Blaze Acil Kurtarma ve Zaman Makinesi", "Sistem geri yükleme ve donanım denetim konsolu", "alacritty -e blaze-recovery", "system-error"),
-        ("konami", "Blaze SolarEvolution Retro Modu (Easter Egg)", "80'ler CRT ve Matrix atmosferini tetikle", "solar-shell konami", "input-gaming"),
-        ("season", "Mevsimsel Atmosfer ve Renk Teması", "Gündönümü ve ekinoks renk tonunu göster", "solar-shell season", "preferences-desktop-wallpaper"),
-        ("theme", "Masaüstü Kabuk Motorunu Değiştir", "Noctalia, Caelestia ve end4-pC arasında geçiş yap", "solar-shell settings", "preferences-desktop-theme"),
-        ("settings", "SolarUI ve Masaüstü Ayarları", "Görev çubuğu, tema, ekran ve sistem tercihlerini yönet", "solar-shell settings", "preferences-system"),
-        ("ekran", "Ekran Çözünürlüğü ve Bağımsız DPI Ölçeği", "Çoklu monitör ve arayüz boyutlandırma ayarları", "solar-shell settings", "video-display"),
+        ("store", "FireHub Uygulama Mağazası", "Portadora (.blz) ve Flathub uygulama mağazasını aç", "firehub", "firehub"),
+        ("install", "BlazeOS Sistem Kurucusu (Solar Installer)", "BlazeOS'u sabit diske grafiksel sihirbaz ile kur", "solar-shell installer", "solar-installer"),
+        ("settings", "SolarUI Masaüstü Ayarları", "ColorOS 17 Living Flow kontrol paneli, kabuk motoru ve görev çubuğu", "solar-shell settings", "solar-settings"),
+        ("welcome", "BlazeOS Karşılama & Rehber Merkezi", "Kısayol rehberi, kabuk seçici ve sistem araçları", "solar-shell welcome", "solar-welcome"),
+        ("game", "Blaze GameZone Tam Ekran Oyun Kabuğu", "Steam Deck / Xbox UI Konsol Modunu ve Proton-GE Yöneticisini Başlat", "solar-shell gamezone", "solar-gamezone"),
+        ("berp kurtarma", "Blaze Acil Kurtarma & Zaman Makinesi (BERP)", "Kurtarma, Portadora Doğrulama ve Donanım Denetim Konsolunu Başlat", "alacritty -e blaze-recovery", "blaze-recovery"),
+        ("konami", "Blaze SolarEvolution Retro Modu (Easter Egg)", "80'ler CRT ve Matrix atmosferini tetikle", "solar-shell konami", "solar-gamezone"),
+        ("season", "Mevsimsel Atmosfer ve Renk Teması", "Gündönümü ve ekinoks renk tonunu göster", "solar-shell season", "solar-settings"),
+        ("theme", "Masaüstü Kabuk Motorunu Değiştir", "Noctalia, Caelestia ve end4-pC arasında geçiş yap", "solar-shell settings", "solar-settings"),
+        ("ekran", "Ekran Çözünürlüğü ve Bağımsız DPI Ölçeği", "Çoklu monitör ve arayüz boyutlandırma ayarları", "solar-shell settings", "solar-settings"),
         ("pano", "Pano Geçmişi Yöneticisi", "Kopyalanan metinleri ve panoyu filtrele (cb)", "solar-shell omnibar", "edit-paste"),
         ("lock", "Ekranı Kilitle", "Oturumu güvenle kilitle", "solar-lock", "system-lock-screen"),
         ("reboot", "Sistemi Yeniden Başlat", "Bilgisayarı baştan başlat", "systemctl reboot", "system-reboot"),

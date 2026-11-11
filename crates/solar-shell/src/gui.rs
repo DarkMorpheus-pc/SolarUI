@@ -154,32 +154,36 @@ fn generate_taskbar_css(
             background-color: transparent;
         }}
 
+        button {{
+            background-image: none;
+        }}
+
         .kde-taskbar-container {{
             background-color: {};
             border: 1px solid {};
-            border-radius: 14px;
-            padding: 3px 8px;
+            border-radius: 20px;
+            padding: 3px 10px;
             margin: 2px 14px 4px 14px;
             {}
         }}
 
         .kde-kickoff-btn {{
-            background: linear-gradient(135deg, #00688b, #0095c7);
+            background: linear-gradient(135deg, #0ea5e9, #2563eb);
             color: #ffffff;
-            border-radius: 6px;
-            padding: 4px 8px;
+            border-radius: 999px;
+            padding: 4px 12px;
             margin-right: 6px;
-            border: none;
+            border: 1px solid rgba(186, 230, 253, 0.35);
             {}
         }}
 
         .kde-kickoff-btn:hover {{
-            background: linear-gradient(135deg, #007ba4, #14a8dc);
+            background: linear-gradient(135deg, #38bdf8, #3b82f6);
         }}
 
         .kde-pinned-btn {{
             background-color: transparent;
-            border-radius: 6px;
+            border-radius: 12px;
             padding: 6px 8px;
             margin: 0 2px;
             border: none;
@@ -194,13 +198,13 @@ fn generate_taskbar_css(
         .kde-task-btn {{
             background-color: {};
             color: {};
-            border-radius: 6px;
+            border-radius: 999px;
             border: 1px solid transparent;
             border-bottom: 2px solid transparent;
-            padding: 4px 12px;
+            padding: 4px 14px;
             margin: 0 3px;
             font-size: 13px;
-            font-weight: 500;
+            font-weight: 600;
             {}
         }}
 
@@ -256,10 +260,10 @@ fn generate_taskbar_css(
         .kde-clock-pill {{
             background-color: {};
             color: {};
-            border-radius: 6px;
-            padding: 4px 12px;
-            font-weight: 600;
-            font-size: 13px;
+            border-radius: 999px;
+            padding: 4px 14px;
+            font-weight: 700;
+            font-size: 12.5px;
             margin: 0 4px;
         }}
 

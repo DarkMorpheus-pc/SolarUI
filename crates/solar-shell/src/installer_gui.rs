@@ -1,8 +1,8 @@
 #![allow(deprecated)]
 use gtk4::prelude::*;
 use gtk4::{
-    Box as GtkBox, Button, CheckButton, ComboBoxText, CssProvider, Entry,
-    Label, Notebook, Orientation, PasswordEntry, ProgressBar, ScrolledWindow, TextView, Window,
+    Box as GtkBox, Button, CheckButton, ComboBoxText, Entry, Label, Orientation, PasswordEntry,
+    ProgressBar, ScrolledWindow, Stack, StackTransitionType, TextView, Window,
 };
 use gtk4::{gdk, glib};
 use serde::{Deserialize, Serialize};
@@ -12,97 +12,67 @@ use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::rc::Rc;
 
-const INSTALLER_CSS: &str = r#"
-window {
-    background-color: #0b0e14;
-    color: #f3f4f6;
-}
-.installer-root {
-    background: linear-gradient(145deg, #0b0e14 0%, #111827 55%, #171324 100%);
-    padding: 24px;
-}
-.installer-header {
-    background-color: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(255, 158, 100, 0.28);
-    border-radius: 16px;
-    padding: 18px 22px;
-    margin-bottom: 14px;
-}
-.installer-title {
-    font-size: 22px;
-    font-weight: 800;
-    color: #ff9e64;
-}
-.installer-subtitle {
-    font-size: 13px;
-    color: #9ca3af;
-}
-.installer-card {
-    background-color: rgba(17, 24, 39, 0.85);
-    border: 1px solid rgba(255, 255, 255, 0.09);
-    border-radius: 14px;
-    padding: 18px;
-    margin-bottom: 12px;
-}
-.section-heading {
-    font-size: 16px;
-    font-weight: 700;
-    color: #f9fafb;
-    margin-bottom: 4px;
-}
-.section-desc {
-    font-size: 12px;
-    color: #9ca3af;
-    margin-bottom: 10px;
-}
-.disk-badge-ok {
-    background-color: rgba(16, 185, 129, 0.18);
-    color: #34d399;
-    border-radius: 8px;
-    padding: 4px 10px;
-    font-weight: 700;
-    font-size: 12px;
-}
-.disk-badge-warn {
-    background-color: rgba(245, 158, 11, 0.18);
-    color: #fbbf24;
-    border-radius: 8px;
-    padding: 4px 10px;
-    font-weight: 700;
-    font-size: 12px;
-}
-.primary-btn {
-    background: linear-gradient(90deg, #ff7a2f 0%, #ff9e64 100%);
-    color: #0b0e14;
-    font-weight: 800;
-    border-radius: 10px;
-    padding: 10px 20px;
-    border: none;
-}
-.secondary-btn {
-    background-color: rgba(255, 255, 255, 0.08);
-    color: #e5e7eb;
-    font-weight: 600;
-    border-radius: 10px;
-    padding: 10px 18px;
-    border: 1px solid rgba(255, 255, 255, 0.14);
-}
-.danger-btn {
-    background: linear-gradient(90deg, #dc2626 0%, #ef4444 100%);
-    color: #ffffff;
-    font-weight: 800;
-    border-radius: 10px;
-    padding: 10px 22px;
-    border: none;
-}
-.log-view {
-    background-color: #07090d;
-    color: #a7f3d0;
-    font-family: monospace;
-    font-size: 12px;
-    padding: 12px;
-    border-radius: 10px;
-}
+use crate::living_flow::{
+    apply_living_flow_theme, build_living_flow_topbar, load_png_emblem, FluidCloud, FluidCloudTone,
+};
+
+const INSTALLER_EMBLEM_PNG: &[u8] =
+    include_bytes!("../../../data/icons/living-flow/solar-installer-64.png");
+
+const INSTALLER_EXTRA_CSS: &str = r#"
+    .installer-body {
+        padding: 16px 24px 20px 24px;
+    }
+
+    .installer-hero {
+        background: linear-gradient(135deg, rgba(249, 115, 22, 0.16) 0%, rgba(14, 165, 233, 0.14) 100%);
+        border: 1px solid rgba(251, 146, 60, 0.28);
+        border-radius: 20px;
+        padding: 14px 20px;
+        margin-bottom: 12px;
+    }
+
+    .installer-hero-title {
+        font-size: 18.5px;
+        font-weight: 800;
+        color: #ffedd5;
+    }
+
+    .installer-hero-sub {
+        font-size: 12px;
+        color: #cbd5e1;
+    }
+
+    .stepper-bar {
+        background-color: rgba(15, 23, 42, 0.72);
+        border: 1px solid rgba(255, 255, 255, 0.09);
+        border-radius: 999px;
+        padding: 6px;
+        margin-bottom: 12px;
+    }
+
+    .stepper-connector {
+        color: rgba(148, 163, 184, 0.45);
+        font-weight: 700;
+        font-size: 13px;
+    }
+
+    .log-view,
+    .log-view text {
+        background-color: #060911;
+        color: #a7f3d0;
+        font-family: monospace;
+        font-size: 12px;
+        padding: 12px;
+        border-radius: 14px;
+    }
+
+    .log-frame {
+        background-color: #060911;
+        border: 1px solid rgba(255, 255, 255, 0.10);
+        border-radius: 16px;
+        padding: 4px;
+    }
 "#;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -130,8 +100,67 @@ struct InstallerAnswersPayload {
     full_name: String,
 }
 
+fn localize_probe_message(raw: &str) -> String {
+    let trimmed = raw.trim();
+    if let Some(rest) = trimmed.strip_prefix("disk already contains ") {
+        if let Some(count_str) = rest.split_whitespace().next() {
+            return format!(
+                "Diskte kurulum sırasında silinecek {} mevcut bölüm bulunuyor",
+                count_str
+            );
+        }
+    }
+    if let Some(rest) = trimmed.strip_prefix("partition ") {
+        if let Some((dev, label_part)) = rest.split_once(" is an existing EFI System Partition ") {
+            return format!(
+                "{} üzerinde mevcut bir EFI Sistem Bölümü {} yer alıyor",
+                dev, label_part
+            );
+        }
+        if let Some((dev, label_part)) = rest.split_once(" carries Windows/Microsoft label ") {
+            return format!(
+                "{} bölümü Windows/Microsoft etiketi ({}) taşıyor",
+                dev, label_part
+            );
+        }
+    }
+    match trimmed {
+        "smaller than 16 GiB" => "Disk kapasitesi minimum 16 GiB sınırının altında".to_string(),
+        "read-only device" => "Salt okunur (yazma korumalı) depolama aygıtı".to_string(),
+        "device or partition is mounted" => {
+            "Bu disk şu anda çalışan sistem tarafından kullanılıyor (aktif kök/EFI bölümü bağlı)"
+                .to_string()
+        }
+        other if other.contains("removable") => {
+            "Çıkarılabilir aygıt algılandı (kurulum için aşağıdaki izin kutucuğunu işaretleyin)"
+                .to_string()
+        }
+        other => other.to_string(),
+    }
+}
+
+fn format_disk_feedback(d: &ProbedDisk) -> (String, bool) {
+    let mut parts = Vec::new();
+    for r in &d.rejection_reasons {
+        parts.push(localize_probe_message(r));
+    }
+    for w in &d.warnings {
+        parts.push(localize_probe_message(w));
+    }
+    if parts.is_empty() {
+        (
+            "✓ Seçilen disk temiz GPT + Limine UEFI/BIOS + fs-verity kurulumu için tamamen hazır."
+                .to_string(),
+            true,
+        )
+    } else if !d.eligible {
+        (format!("Durum: {}", parts.join("  •  ")), false)
+    } else {
+        (format!("Bilgi: {}", parts.join("  •  ")), false)
+    }
+}
+
 fn probe_disks() -> Vec<ProbedDisk> {
-    // 1. Try solar-installer probe --json
     for cmd_pair in [
         vec!["solar-installer", "probe", "--json"],
         vec!["sudo", "-n", "solar-installer", "probe", "--json"],
@@ -147,7 +176,6 @@ fn probe_disks() -> Vec<ProbedDisk> {
         }
     }
 
-    // 2. Fallback /sys/block scan if solar-installer is not in PATH or non-root preview
     let mut disks = Vec::new();
     if let Ok(entries) = std::fs::read_dir("/sys/block") {
         for entry in entries.flatten() {
@@ -167,7 +195,9 @@ fn probe_disks() -> Vec<ProbedDisk> {
             let bytes = sectors * 512;
             let model = std::fs::read_to_string(entry.path().join("device/model"))
                 .map(|s| s.trim().to_string())
-                .unwrap_or_else(|_| "Sanal / NVMe Disk".to_string());
+                .ok()
+                .filter(|s| !s.is_empty())
+                .unwrap_or_else(|| "VirtIO / NVMe Depolama".to_string());
             let removable = std::fs::read_to_string(entry.path().join("removable"))
                 .map(|s| s.trim() == "1")
                 .unwrap_or(false);
@@ -204,21 +234,15 @@ pub fn launch_installer_window() {
         return;
     }
 
-    let provider = CssProvider::new();
-    provider.load_from_data(INSTALLER_CSS);
-    if let Some(display) = gdk::Display::default() {
-        gtk4::style_context_add_provider_for_display(
-            &display,
-            &provider,
-            gtk4::STYLE_PROVIDER_PRIORITY_APPLICATION,
-        );
-    }
+    apply_living_flow_theme(INSTALLER_EXTRA_CSS);
 
     let main_loop = glib::MainLoop::new(None, false);
     let window = Window::builder()
-        .title("BlazeOS Native — Solar Kurulum Sihirbazı")
+        .title("Blaze Universe — Solar Kurulum Sihirbazı")
+        .decorated(false)
         .default_width(920)
-        .default_height(680)
+        .default_height(640)
+        .resizable(false)
         .build();
 
     let loop_quit = main_loop.clone();
@@ -227,37 +251,141 @@ pub fn launch_installer_window() {
         glib::Propagation::Proceed
     });
 
-    let root = GtkBox::new(Orientation::Vertical, 12);
-    root.add_css_class("installer-root");
+    let key_ctrl = gtk4::EventControllerKey::new();
+    let win_esc = window.downgrade();
+    key_ctrl.connect_key_pressed(move |_, key, _, _| {
+        if key == gdk::Key::Escape {
+            if let Some(w) = win_esc.upgrade() {
+                w.close();
+            }
+            return glib::Propagation::Stop;
+        }
+        glib::Propagation::Proceed
+    });
+    window.add_controller(key_ctrl);
 
-    // Header
-    let header = GtkBox::new(Orientation::Vertical, 4);
-    header.add_css_class("installer-header");
-    let title = Label::new(Some("BlazeOS Native — Solar Kurulum Sihirbazı"));
-    title.add_css_class("installer-title");
-    title.set_halign(gtk4::Align::Start);
-    let subtitle = Label::new(Some(
-        "Kriptografik bütünlük doğrulanmış kök dosya sistemi • Limine 12.x UEFI/BIOS • BERP Kurtarma • Tam Donanım Kalkanı",
+    let shell_box = GtkBox::new(Orientation::Vertical, 0);
+    shell_box.add_css_class("lf-window-shell");
+
+    let fluid_cloud = FluidCloud::new("Adım 1/3 • Depolama Hazır");
+    let emblem = load_png_emblem(INSTALLER_EMBLEM_PNG, 34);
+    let loop_top = main_loop.clone();
+    let topbar = build_living_flow_topbar(
+        &window,
+        Some(emblem),
+        "Blaze Universe — Solar Kurulum Sihirbazı",
+        "Living Flow Design • Limine 12.x UEFI/BIOS • fs-verity & BERP",
+        &fluid_cloud,
+        Some(Box::new(move || loop_top.quit())),
+    );
+    shell_box.append(&topbar);
+
+    let body = GtkBox::new(Orientation::Vertical, 0);
+    body.add_css_class("installer-body");
+    body.set_vexpand(true);
+
+    // Luminous Hero Card
+    let hero = GtkBox::new(Orientation::Vertical, 3);
+    hero.add_css_class("installer-hero");
+    let h_title = Label::new(Some("BlazeOS Native Kurulum ve Disk Yapılandırma Merkezi"));
+    h_title.add_css_class("installer-hero-title");
+    h_title.set_halign(gtk4::Align::Start);
+    let h_sub = Label::new(Some(
+        "Kriptografik bütünlük doğrulanmış kök dosya sistemi • Tam Donanım Kalkanı • Atomik Kurtarma Protokolü",
     ));
-    subtitle.add_css_class("installer-subtitle");
-    subtitle.set_halign(gtk4::Align::Start);
-    header.append(&title);
-    header.append(&subtitle);
-    root.append(&header);
+    h_sub.add_css_class("installer-hero-sub");
+    h_sub.set_halign(gtk4::Align::Start);
+    hero.append(&h_title);
+    hero.append(&h_sub);
+    body.append(&hero);
 
-    let notebook = Notebook::new();
-    notebook.set_vexpand(true);
+    // ColorOS 17 Capsule Stepper Bar + Fluid Stack
+    let stepper = GtkBox::new(Orientation::Horizontal, 10);
+    stepper.add_css_class("stepper-bar");
+    stepper.set_halign(gtk4::Align::Center);
 
-    let disks_state: Rc<RefCell<Vec<ProbedDisk>>> = Rc::new(RefCell::new(probe_disks()));
+    let step_btn1 = Button::with_label("①  Hedef Disk Seçimi");
+    step_btn1.add_css_class("lf-step-pill");
+    step_btn1.add_css_class("active");
+
+    let sep1 = Label::new(Some("───"));
+    sep1.add_css_class("stepper-connector");
+
+    let step_btn2 = Button::with_label("②  Kimlik & Bölgesel Ayarlar");
+    step_btn2.add_css_class("lf-step-pill");
+
+    let sep2 = Label::new(Some("───"));
+    sep2.add_css_class("stepper-connector");
+
+    let step_btn3 = Button::with_label("③  Doğrulama & Kurulum");
+    step_btn3.add_css_class("lf-step-pill");
+
+    stepper.append(&step_btn1);
+    stepper.append(&sep1);
+    stepper.append(&step_btn2);
+    stepper.append(&sep2);
+    stepper.append(&step_btn3);
+    body.append(&stepper);
+
+    let stack = Stack::new();
+    stack.set_transition_type(StackTransitionType::SlideLeftRight);
+    stack.set_transition_duration(280);
+    stack.set_vexpand(true);
+
+    let switch_step = {
+        let stack_c = stack.clone();
+        let b1 = step_btn1.clone();
+        let b2 = step_btn2.clone();
+        let b3 = step_btn3.clone();
+        let cloud = fluid_cloud.clone();
+        Rc::new(move |idx: usize| {
+            b1.remove_css_class("active");
+            b2.remove_css_class("active");
+            b3.remove_css_class("active");
+            match idx {
+                0 => {
+                    b1.add_css_class("active");
+                    stack_c.set_visible_child_name("step1");
+                    cloud.pulse("Adım 1/3 • Hedef Disk Seçimi", FluidCloudTone::Info, false);
+                }
+                1 => {
+                    b2.add_css_class("active");
+                    stack_c.set_visible_child_name("step2");
+                    cloud.pulse(
+                        "Adım 2/3 • Kullanıcı & Bölge",
+                        FluidCloudTone::Info,
+                        false,
+                    );
+                }
+                _ => {
+                    b3.add_css_class("active");
+                    stack_c.set_visible_child_name("step3");
+                    cloud.pulse("Adım 3/3 • Onay & Kurulum", FluidCloudTone::Success, false);
+                }
+            }
+        })
+    };
+
+    {
+        let sw = switch_step.clone();
+        step_btn1.connect_clicked(move |_| sw(0));
+    }
+    {
+        let sw = switch_step.clone();
+        step_btn2.connect_clicked(move |_| sw(1));
+    }
+    {
+        let sw = switch_step.clone();
+        step_btn3.connect_clicked(move |_| sw(2));
+    }
+
+    let disks_state: Rc<RefCell<Vec<ProbedDisk>>> = Rc::new(RefCell::new(Vec::new()));
 
     // ── STEP 1: HEDEF DİSK VE BÖLÜMLEME ──────────────────────────────────────
     let page_disk = GtkBox::new(Orientation::Vertical, 12);
-    page_disk.set_margin_top(12);
-    page_disk.set_margin_bottom(12);
-    page_disk.set_margin_start(12);
-    page_disk.set_margin_end(12);
+    page_disk.set_margin_top(6);
 
-    let disk_card = GtkBox::new(Orientation::Vertical, 10);
+    let disk_card = GtkBox::new(Orientation::Vertical, 12);
     disk_card.add_css_class("installer-card");
 
     let d_head = Label::new(Some("1. Hedef Depolama Aygıtını Seçin"));
@@ -266,18 +394,30 @@ pub fn launch_installer_window() {
     disk_card.append(&d_head);
 
     let d_desc = Label::new(Some(
-        "Solar Installer seçilen diskte otomatik olarak GPT bölüm tablosu, 512 MiB FAT32 EFI Sistem Bölümü (ESP), 1 MiB BIOS Boot ve geri kalan alanda BlazeOS Native (ext4, fs-verity &BERP) kök bölümünü oluşturur.",
+        "Solar Installer seçilen diskte otomatik olarak GPT bölüm tablosu, 512 MiB FAT32 EFI Sistem Bölümü (ESP), 1 MiB BIOS Boot ve geri kalan alanda BlazeOS Native (ext4, fs-verity & BERP) kök bölümünü oluşturur.",
     ));
     d_desc.add_css_class("section-desc");
     d_desc.set_wrap(true);
+    d_desc.set_xalign(0.0);
     d_desc.set_halign(gtk4::Align::Start);
     disk_card.append(&d_desc);
 
     let disk_combo = ComboBoxText::new();
     let disk_warning_lbl = Label::new(Some(""));
     disk_warning_lbl.add_css_class("disk-badge-warn");
-    disk_warning_lbl.set_halign(gtk4::Align::Start);
+    disk_warning_lbl.set_halign(gtk4::Align::Fill);
+    disk_warning_lbl.set_xalign(0.0);
     disk_warning_lbl.set_wrap(true);
+
+    let apply_badge_style = |lbl: &Label, is_clean: bool| {
+        lbl.remove_css_class("disk-badge-ok");
+        lbl.remove_css_class("disk-badge-warn");
+        if is_clean {
+            lbl.add_css_class("disk-badge-ok");
+        } else {
+            lbl.add_css_class("disk-badge-warn");
+        }
+    };
 
     let populate_disks = {
         let disks_state = disks_state.clone();
@@ -289,28 +429,37 @@ pub fn launch_installer_window() {
             *disks_state.borrow_mut() = list.clone();
             for d in &list {
                 let gib = (d.bytes as f64) / (1024.0 * 1024.0 * 1024.0);
-                let status = if d.eligible { "Uygun" } else { "Uygun Değil" };
-                let label = format!("{} — {} ({:.1} GiB) [{}]", d.path, d.model, gib, status);
+                let model_disp = if d.model.trim().is_empty() {
+                    "Depolama Aygıtı"
+                } else {
+                    d.model.trim()
+                };
+                let status = if d.eligible {
+                    "Kuruluma Uygun"
+                } else if d.mounted {
+                    "Aktif Sistem Diski"
+                } else {
+                    "Uygun Değil"
+                };
+                let label = format!(
+                    "{} — {} ({:.1} GiB)  [{}]",
+                    d.path, model_disp, gib, status
+                );
                 disk_combo.append(Some(&d.path), &label);
             }
             if let Some(first) = list.iter().find(|d| d.eligible).or_else(|| list.first()) {
                 disk_combo.set_active_id(Some(&first.path));
-                if !first.warnings.is_empty() {
-                    disk_warning_lbl.set_text(&format!("Uyarılar: {}", first.warnings.join(" | ")));
-                } else if !first.rejection_reasons.is_empty() {
-                    disk_warning_lbl.set_text(&format!(
-                        "Engeller: {}",
-                        first.rejection_reasons.join(" | ")
-                    ));
-                } else {
-                    disk_warning_lbl.set_text("Seçilen disk temiz kurulum için hazır.");
-                }
+                let (txt, is_clean) = format_disk_feedback(first);
+                apply_badge_style(&disk_warning_lbl, is_clean);
+                disk_warning_lbl.set_text(&txt);
             } else {
-                disk_warning_lbl.set_text("Kuruluma uygun bir hedef disk tespit edilemedi.");
+                apply_badge_style(&disk_warning_lbl, false);
+                disk_warning_lbl.set_text("Kuruluma uygun bir depolama aygıtı tespit edilemedi.");
             }
+            list.len()
         }
     };
-    populate_disks();
+    let _ = populate_disks();
 
     {
         let disks_state = disks_state.clone();
@@ -318,33 +467,29 @@ pub fn launch_installer_window() {
         disk_combo.connect_changed(move |cb| {
             if let Some(id) = cb.active_id() {
                 if let Some(d) = disks_state.borrow().iter().find(|x| x.path == id.as_str()) {
-                    if !d.warnings.is_empty() {
-                        disk_warning_lbl.set_text(&format!(
-                            "Uyarılar: {}",
-                            d.warnings.join(" | ")
-                        ));
-                    } else if !d.rejection_reasons.is_empty() {
-                        disk_warning_lbl.set_text(&format!(
-                            "Engeller: {}",
-                            d.rejection_reasons.join(" | ")
-                        ));
-                    } else {
-                        disk_warning_lbl.set_text("Seçilen disk temiz kurulum için hazır.");
-                    }
+                    let (txt, is_clean) = format_disk_feedback(d);
+                    apply_badge_style(&disk_warning_lbl, is_clean);
+                    disk_warning_lbl.set_text(&txt);
                 }
             }
         });
     }
 
-    let disk_row = GtkBox::new(Orientation::Horizontal, 10);
+    let disk_row = GtkBox::new(Orientation::Horizontal, 12);
     disk_combo.set_hexpand(true);
     disk_row.append(&disk_combo);
 
-    let refresh_btn = Button::with_label("Diskleri Yenile");
-    refresh_btn.add_css_class("secondary-btn");
+    let refresh_btn = Button::with_label("↻  Diskleri Yenile");
+    refresh_btn.add_css_class("lf-btn-glass");
     let pop_clone = populate_disks.clone();
+    let cloud_refresh = fluid_cloud.clone();
     refresh_btn.connect_clicked(move |_| {
-        pop_clone();
+        let count = pop_clone();
+        cloud_refresh.pulse(
+            &format!("{} depolama aygıtı tarandı", count),
+            FluidCloudTone::Success,
+            false,
+        );
     });
     disk_row.append(&refresh_btn);
     disk_card.append(&disk_row);
@@ -353,29 +498,48 @@ pub fn launch_installer_window() {
     let chk_removable = CheckButton::with_label(
         "Çıkarılabilir (USB / Harici NVMe) disklere kuruluma izin ver (--allow-removable)",
     );
+    let cloud_rem = fluid_cloud.clone();
+    chk_removable.connect_toggled(move |cb| {
+        if cb.is_active() {
+            cloud_rem.pulse(
+                "Harici USB/NVMe kurulum izni etkin",
+                FluidCloudTone::Warning,
+                false,
+            );
+        } else {
+            cloud_rem.pulse(
+                "Yalnızca dahili disk koruması etkin",
+                FluidCloudTone::Info,
+                false,
+            );
+        }
+    });
     disk_card.append(&chk_removable);
 
     page_disk.append(&disk_card);
 
     let nav_disk = GtkBox::new(Orientation::Horizontal, 10);
     nav_disk.set_halign(gtk4::Align::End);
-    let to_step2_btn = Button::with_label("İleri: Kullanıcı & Bölge Ayarları →");
-    to_step2_btn.add_css_class("primary-btn");
-    let nb_ref1 = notebook.clone();
+    let to_step2_btn = Button::with_label("İleri: Kullanıcı & Bölge Ayarları  →");
+    to_step2_btn.add_css_class("lf-btn-flame");
+    let sw_to_2 = switch_step.clone();
     to_step2_btn.connect_clicked(move |_| {
-        nb_ref1.set_current_page(Some(1));
+        sw_to_2(1);
     });
     nav_disk.append(&to_step2_btn);
     page_disk.append(&nav_disk);
 
-    notebook.append_page(&page_disk, Some(&Label::new(Some("1. Hedef Disk"))));
+    stack.add_named(&page_disk, Some("step1"));
 
     // ── STEP 2: KULLANICI, BİLGİSAYAR ADI VE BÖLGE ──────────────────────────
-    let page_user = GtkBox::new(Orientation::Vertical, 12);
-    page_user.set_margin_top(12);
-    page_user.set_margin_bottom(12);
-    page_user.set_margin_start(12);
-    page_user.set_margin_end(12);
+    let page_user = GtkBox::new(Orientation::Vertical, 10);
+    page_user.set_margin_top(4);
+
+    let user_scroll = ScrolledWindow::builder()
+        .hscrollbar_policy(gtk4::PolicyType::Never)
+        .vscrollbar_policy(gtk4::PolicyType::Automatic)
+        .vexpand(true)
+        .build();
 
     let user_card = GtkBox::new(Orientation::Vertical, 10);
     user_card.add_css_class("installer-card");
@@ -412,7 +576,8 @@ pub fn launch_installer_window() {
     combo_kb.append(Some("de"), "Deutsch (de)");
     combo_kb.append(Some("fr"), "Français (fr)");
     combo_kb.set_active_id(Some("tr"));
-    combo_kb.connect_changed(|cb| {
+    let cloud_kb = fluid_cloud.clone();
+    combo_kb.connect_changed(move |cb| {
         if let Some(id) = cb.active_id() {
             let idx = match id.as_str() {
                 "tr" => "0",
@@ -422,6 +587,11 @@ pub fn launch_installer_window() {
             let _ = Command::new("niri")
                 .args(["msg", "action", "switch-layout", idx])
                 .status();
+            cloud_kb.pulse(
+                &format!("Klavye düzeni '{}' olarak ayarlandı", id),
+                FluidCloudTone::Success,
+                false,
+            );
         }
     });
 
@@ -450,6 +620,7 @@ pub fn launch_installer_window() {
     ] {
         let row = GtkBox::new(Orientation::Horizontal, 12);
         let lbl = Label::new(Some(lbl_txt));
+        lbl.add_css_class("lf-label");
         lbl.set_width_chars(26);
         lbl.set_xalign(0.0);
         widget.set_hexpand(true);
@@ -458,37 +629,36 @@ pub fn launch_installer_window() {
         user_card.append(&row);
     }
 
-    page_user.append(&user_card);
+    user_scroll.set_child(Some(&user_card));
+    page_user.append(&user_scroll);
 
     let nav_user = GtkBox::new(Orientation::Horizontal, 10);
     nav_user.set_halign(gtk4::Align::End);
-    let back_step1_btn = Button::with_label("← Geri");
-    back_step1_btn.add_css_class("secondary-btn");
-    let nb_ref2 = notebook.clone();
+    let back_step1_btn = Button::with_label("←  Geri");
+    back_step1_btn.add_css_class("lf-btn-glass");
+    let sw_back_1 = switch_step.clone();
     back_step1_btn.connect_clicked(move |_| {
-        nb_ref2.set_current_page(Some(0));
+        sw_back_1(0);
     });
-    let to_step3_btn = Button::with_label("İleri: Kurulum Özeti & Onay →");
-    to_step3_btn.add_css_class("primary-btn");
-    let nb_ref3 = notebook.clone();
+    let to_step3_btn = Button::with_label("İleri: Kurulum Özeti & Onay  →");
+    to_step3_btn.add_css_class("lf-btn-flame");
+    let sw_to_3 = switch_step.clone();
     to_step3_btn.connect_clicked(move |_| {
-        nb_ref3.set_current_page(Some(2));
+        sw_to_3(2);
     });
     nav_user.append(&back_step1_btn);
     nav_user.append(&to_step3_btn);
     page_user.append(&nav_user);
 
-    notebook.append_page(&page_user, Some(&Label::new(Some("2. Kimlik & Bölge"))));
+    stack.add_named(&page_user, Some("step2"));
 
     // ── STEP 3: ÖZET, DOĞRULAMA VE KURULUM (`solar-installer apply`) ────────
-    let page_apply = GtkBox::new(Orientation::Vertical, 12);
-    page_apply.set_margin_top(12);
-    page_apply.set_margin_bottom(12);
-    page_apply.set_margin_start(12);
-    page_apply.set_margin_end(12);
+    let page_apply = GtkBox::new(Orientation::Vertical, 10);
+    page_apply.set_margin_top(4);
 
     let apply_card = GtkBox::new(Orientation::Vertical, 10);
     apply_card.add_css_class("installer-card");
+    apply_card.set_vexpand(true);
 
     let a_head = Label::new(Some("3. Kurulum Planı ve Doğrulanmış Disk Yazımı"));
     a_head.add_css_class("section-heading");
@@ -506,9 +676,10 @@ pub fn launch_installer_window() {
     apply_card.append(&progress);
 
     let log_scroll = ScrolledWindow::builder()
-        .min_content_height(210)
+        .min_content_height(175)
         .vexpand(true)
         .build();
+    log_scroll.add_css_class("log-frame");
     let log_view = TextView::new();
     log_view.set_editable(false);
     log_view.set_monospace(true);
@@ -517,16 +688,26 @@ pub fn launch_installer_window() {
     apply_card.append(&log_scroll);
 
     let action_row = GtkBox::new(Orientation::Horizontal, 10);
-    action_row.set_halign(gtk4::Align::End);
+    let back_step2_btn = Button::with_label("←  Geri");
+    back_step2_btn.add_css_class("lf-btn-glass");
+    let sw_back_2 = switch_step.clone();
+    back_step2_btn.connect_clicked(move |_| {
+        sw_back_2(1);
+    });
+    action_row.append(&back_step2_btn);
+
+    let spacer = GtkBox::new(Orientation::Horizontal, 0);
+    spacer.set_hexpand(true);
+    action_row.append(&spacer);
 
     let plan_btn = Button::with_label("Kurulum Planını Doğrula (Dry-Run)");
-    plan_btn.add_css_class("secondary-btn");
+    plan_btn.add_css_class("lf-btn-glass");
 
     let install_btn = Button::with_label("BlazeOS'u Şimdi Diske Kur");
-    install_btn.add_css_class("danger-btn");
+    install_btn.add_css_class("lf-btn-danger");
 
     let reboot_btn = Button::with_label("Şimdi Yeniden Başlat");
-    reboot_btn.add_css_class("primary-btn");
+    reboot_btn.add_css_class("lf-btn-primary");
     reboot_btn.set_visible(false);
     reboot_btn.connect_clicked(|_| {
         let _ = Command::new("sudo").args(["-n", "reboot"]).spawn();
@@ -537,11 +718,13 @@ pub fn launch_installer_window() {
     {
         let disk_combo = disk_combo.clone();
         let log_view = log_view.clone();
+        let cloud_plan = fluid_cloud.clone();
         plan_btn.connect_clicked(move |_| {
             let target = disk_combo
                 .active_id()
                 .map(|s| s.to_string())
                 .unwrap_or_else(|| "/dev/vdb".to_string());
+            cloud_plan.pulse("Dry-Run kurulum planı denetleniyor...", FluidCloudTone::Info, false);
             let out = Command::new("sudo")
                 .args(["-n", "solar-installer", "plan", "--target", &target])
                 .output();
@@ -574,9 +757,11 @@ pub fn launch_installer_window() {
         let progress = progress.clone();
         let log_view = log_view.clone();
         let reboot_btn = reboot_btn.clone();
+        let cloud_inst = fluid_cloud.clone();
 
         install_btn.connect_clicked(move |btn| {
             if !chk_confirm_erase.is_active() {
+                cloud_inst.pulse("Disk silme onayı gerekli", FluidCloudTone::Warning, false);
                 log_view
                     .buffer()
                     .set_text("[UYARI] Lütfen önce disk silme onay kutucuğunu işaretleyin.");
@@ -585,12 +770,14 @@ pub fn launch_installer_window() {
             let pass1 = entry_pass.text().to_string();
             let pass2 = entry_pass2.text().to_string();
             if pass1.len() < 8 {
+                cloud_inst.pulse("Parola en az 8 karakter olmalı", FluidCloudTone::Warning, false);
                 log_view
                     .buffer()
                     .set_text("[HATA] Parola en az 8 karakter uzunluğunda olmalıdır.");
                 return;
             }
             if pass1 != pass2 {
+                cloud_inst.pulse("Parolalar eşleşmiyor", FluidCloudTone::Danger, false);
                 log_view
                     .buffer()
                     .set_text("[HATA] Girdiğiniz parolalar birbiriyle eşleşmiyor.");
@@ -628,6 +815,7 @@ pub fn launch_installer_window() {
 
             let allow_rem = chk_removable.is_active();
             btn.set_sensitive(false);
+            cloud_inst.pulse("Kurulum devam ediyor...", FluidCloudTone::Info, true);
             progress.set_fraction(0.15);
             progress.set_text(Some("Kurulum başlatıldı: Disk bölümleniyor ve doğrulanıyor..."));
 
@@ -714,6 +902,7 @@ pub fn launch_installer_window() {
             let log_ui = log_view.clone();
             let reboot_ui = reboot_btn.clone();
             let btn_ui = btn.clone();
+            let cloud_done = cloud_inst.clone();
             glib::MainContext::default().spawn_local(async move {
                 let mut accumulated = String::new();
                 while let Ok((frac, msg, done)) = rx.recv().await {
@@ -722,9 +911,11 @@ pub fn launch_installer_window() {
                     progress_ui.set_fraction(frac);
                     if done {
                         progress_ui.set_text(Some("Kurulum Başarıyla Tamamlandı!"));
+                        cloud_done.pulse("BlazeOS Native Kuruldu!", FluidCloudTone::Success, true);
                         reboot_ui.set_visible(true);
                     } else if frac == 0.0 {
                         progress_ui.set_text(Some("Kurulum durduruldu / hata oluştu"));
+                        cloud_done.pulse("Kurulum hatası algılandı", FluidCloudTone::Danger, false);
                         btn_ui.set_sensitive(true);
                     }
                 }
@@ -738,10 +929,12 @@ pub fn launch_installer_window() {
     apply_card.append(&action_row);
     page_apply.append(&apply_card);
 
-    notebook.append_page(&page_apply, Some(&Label::new(Some("3. Kurulum & Onay"))));
+    stack.add_named(&page_apply, Some("step3"));
+    stack.set_visible_child_name("step1");
 
-    root.append(&notebook);
-    window.set_child(Some(&root));
+    body.append(&stack);
+    shell_box.append(&body);
+    window.set_child(Some(&shell_box));
     window.present();
     main_loop.run();
 }

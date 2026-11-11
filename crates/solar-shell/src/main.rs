@@ -18,6 +18,7 @@ pub mod delight;
 pub mod omnibar;
 pub mod gamezone_gui;
 pub mod installer_gui;
+pub mod living_flow;
 
 use anyhow::Result;
 use apps::scan_desktop_applications;

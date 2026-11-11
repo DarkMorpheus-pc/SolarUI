@@ -1057,34 +1057,48 @@ fn build_gamezone_ui(main_loop: glib::MainLoop) {
         }
 
         .xbox-game-card {
-            background: #141a24;
-            border-radius: 12px;
-            border: 2px solid transparent;
+            background: linear-gradient(155deg, rgba(20, 29, 46, 0.92), rgba(12, 18, 30, 0.96));
+            background-image: none;
+            border-radius: 20px;
+            border: 1.5px solid rgba(255, 255, 255, 0.14);
             padding: 0;
             margin-right: 14px;
             margin-top: 8px;
             margin-bottom: 8px;
             min-width: 156px;
             min-height: 156px;
-            transition: transform 220ms ease-out, border 220ms ease-out, box-shadow 220ms ease-out;
-            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.45);
+            transition: all 220ms cubic-bezier(0.22, 1, 0.36, 1);
+            box-shadow: 0 8px 22px rgba(2, 6, 23, 0.52);
         }
 
         .xbox-game-card:hover {
-            border: 2px solid rgba(255, 255, 255, 0.6);
+            border-color: rgba(125, 211, 252, 0.72);
             transform: scale(1.04);
         }
 
         .xbox-game-card:focus, .xbox-game-card.active-focus {
-            border: 3px solid #52b7ff;
-            box-shadow: 0 0 28px rgba(82, 183, 255, 0.75), 0 10px 30px rgba(0, 0, 0, 0.8);
-            transform: scale(1.08);
+            border: 2.5px solid #38bdf8;
+            box-shadow: 0 0 26px rgba(56, 189, 248, 0.65), 0 12px 30px rgba(0, 0, 0, 0.8);
+            transform: scale(1.07);
         }
 
         .xbox-game-card-img {
-            border-radius: 8px;
+            border-radius: 18px;
             min-width: 156px;
             min-height: 156px;
+        }
+
+        .xbox-card-caption {
+            background: linear-gradient(180deg, rgba(9, 13, 22, 0.0) 0%, rgba(9, 13, 22, 0.88) 45%, rgba(9, 13, 22, 0.96) 100%);
+            border-bottom-left-radius: 18px;
+            border-bottom-right-radius: 18px;
+            padding: 18px 10px 8px 10px;
+        }
+
+        .xbox-card-caption-title {
+            color: #f8fafc;
+            font-size: 12px;
+            font-weight: 800;
         }
 
         /* ── Bento Grid Bottom Banners ── */
@@ -1561,12 +1575,25 @@ fn build_gamezone_ui(main_loop: glib::MainLoop) {
         let card = Button::new();
         card.add_css_class("xbox-game-card");
 
-        let c_box = GtkBox::new(Orientation::Vertical, 0);
+        let card_overlay = Overlay::new();
         let img = create_game_cover_image(game);
         img.set_size_request(156, 156);
         img.add_css_class("xbox-game-card-img");
-        c_box.append(&img);
-        card.set_child(Some(&c_box));
+        card_overlay.set_child(Some(&img));
+
+        let cap_box = GtkBox::new(Orientation::Vertical, 1);
+        cap_box.add_css_class("xbox-card-caption");
+        cap_box.set_valign(gtk4::Align::End);
+        cap_box.set_hexpand(true);
+        let cap_lbl = Label::new(Some(&game.title));
+        cap_lbl.add_css_class("xbox-card-caption-title");
+        cap_lbl.set_halign(gtk4::Align::Start);
+        cap_lbl.set_ellipsize(gtk4::pango::EllipsizeMode::End);
+        cap_lbl.set_max_width_chars(16);
+        cap_box.append(&cap_lbl);
+        card_overlay.add_overlay(&cap_box);
+
+        card.set_child(Some(&card_overlay));
 
         let g_clone = game.clone();
         let bg_clone = bg_pic_for_events.clone();

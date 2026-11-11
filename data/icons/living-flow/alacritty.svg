@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f172a"/>
+      <stop offset="100%" stop-color="#1e293b"/>
+    </linearGradient>
+    <radialGradient id="luminousGlow" cx="26%" cy="20%" r="74%">
+      <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.46"/>
+      <stop offset="100%" stop-color="#38bdf8" stop-opacity="0.0"/>
+    </radialGradient>
+    <linearGradient id="contourBorder" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.55"/>
+      <stop offset="45%" stop-color="#ffffff" stop-opacity="0.18"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0.08"/>
+    </linearGradient>
+  </defs>
+  <path d="M 64,13 C 103,13 119,29 119,67 C 119,105 103,121 64,121 C 25,121 9,105 9,67 C 9,29 25,13 64,13 Z" fill="#020617" fill-opacity="0.42"/>
+  <path d="M 64,9 C 103,9 119,25 119,64 C 119,103 103,119 64,119 C 25,119 9,103 9,64 C 9,25 25,9 64,9 Z" fill="url(#bgGrad)"/>
+  <path d="M 64,9 C 103,9 119,25 119,64 C 119,103 103,119 64,119 C 25,119 9,103 9,64 C 9,25 25,9 64,9 Z" fill="url(#luminousGlow)"/>
+  <path d="M 64,10.8 C 101.5,10.8 117.2,26.5 117.2,64 C 117.2,101.5 101.5,117.2 64,117.2 C 26.5,117.2 10.8,101.5 10.8,64 C 10.8,26.5 26.5,10.8 64,10.8 Z" fill="none" stroke="url(#contourBorder)" stroke-width="2.2"/>
+  <g>
+    
+        <rect x="26" y="30" width="76" height="68" rx="14" fill="#090d16" fill-opacity="0.72" stroke="#38bdf8" stroke-opacity="0.45" stroke-width="2"/>
+        <path d="M 40,51 L 56,64 L 40,77" fill="none" stroke="#38bdf8" stroke-width="6.5" stroke-linecap="round" stroke-linejoin="round"/>
+        <line x1="62" y1="77" x2="84" y2="77" stroke="#34d399" stroke-width="6.5" stroke-linecap="round"/>
+        
+  </g>
+</svg>
