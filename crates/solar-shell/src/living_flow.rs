@@ -703,6 +703,22 @@ pub fn load_png_emblem(png_bytes: &[u8], size: i32) -> Image {
     fallback
 }
 
+/// Decodes wide/non-square official brand logos with guaranteed `ContentFit::Contain`
+/// aspect-ratio preservation (never stretches or squishes horizontal logos).
+pub fn load_png_wide_logo(png_bytes: &[u8], width: i32, height: i32) -> gtk4::Picture {
+    let pic = gtk4::Picture::new();
+    pic.set_can_shrink(true);
+    pic.set_content_fit(gtk4::ContentFit::Contain);
+    pic.set_size_request(width, height);
+    pic.set_halign(gtk4::Align::Center);
+    pic.set_valign(gtk4::Align::Center);
+    let bytes = glib::Bytes::from(png_bytes);
+    if let Ok(texture) = gdk::Texture::from_bytes(&bytes) {
+        pic.set_paintable(Some(&texture));
+    }
+    pic
+}
+
 /// Builds a draggable ColorOS 17 Living Flow top bar with app emblem, title, subtitle,
 /// live Fluid Cloud dynamic capsule, and tactile minimize/close controls.
 pub fn build_living_flow_topbar(

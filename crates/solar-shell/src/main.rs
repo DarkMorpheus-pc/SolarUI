@@ -17,6 +17,7 @@ pub mod welcome_gui;
 pub mod delight;
 pub mod omnibar;
 pub mod gamezone_gui;
+pub mod gamezone_live;
 pub mod installer_gui;
 pub mod living_flow;
 

@@ -230,8 +230,8 @@ window-rule {
 window-rule {
     match app-id=r#"^(Alacritty|org\.Alacritty|foot|kitty)$"#
     open-floating true
-    default-column-width { fixed 920; }
-    default-window-height { fixed 560; }
+    default-column-width { fixed 1020; }
+    default-window-height { fixed 540; }
     geometry-corner-radius 20
     clip-to-geometry true
 }

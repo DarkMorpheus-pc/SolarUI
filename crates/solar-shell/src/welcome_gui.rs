@@ -7,12 +7,13 @@ use gtk4::{
 use solar_common::SolarConfig;
 
 use crate::living_flow::{
-    apply_living_flow_theme, build_living_flow_topbar, load_png_emblem, FluidCloud, FluidCloudTone,
+    apply_living_flow_theme, build_living_flow_topbar, load_png_emblem, load_png_wide_logo,
+    FluidCloud, FluidCloudTone,
 };
 
 const WELCOME_EMBLEM_PNG: &[u8] =
     include_bytes!("../../../data/icons/living-flow/solar-welcome-64.png");
-const LOGO_PNG: &[u8] = include_bytes!("../../../data/icons/solar-logo-256.png");
+const LOGO_WIDE_PNG: &[u8] = include_bytes!("../../../data/icons/blaze-logo-wide.png");
 
 const WELCOME_EXTRA_CSS: &str = r#"
     .welcome-body {
@@ -133,10 +134,9 @@ fn build_welcome_ui(main_loop: glib::MainLoop) {
     body.set_vexpand(true);
 
     // Luminous Hero Banner
-    let hero = GtkBox::new(Orientation::Horizontal, 14);
+    let hero = GtkBox::new(Orientation::Horizontal, 16);
     hero.add_css_class("welcome-hero");
-    let logo = load_png_emblem(LOGO_PNG, 48);
-    logo.set_valign(gtk4::Align::Center);
+    let logo = load_png_wide_logo(LOGO_WIDE_PNG, 72, 38);
     hero.append(&logo);
 
     let hero_txt = GtkBox::new(Orientation::Vertical, 2);
